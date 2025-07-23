@@ -36,60 +36,78 @@ export class DatabaseService {
 
   // Sync directors data
   async syncDirectorsData(companiesWithDirectors) {
-    const peopleStmt = this.db.prepare(`
-      INSERT OR IGNORE INTO people (id, name, bio) 
-      VALUES (?, ?, ?)
-    `);
-    
-    const positionsStmt = this.db.prepare(`
-      INSERT OR REPLACE INTO board_positions (
-        id, company_id, person_id, position, appointed_date
-      ) VALUES (?, ?, ?, ?, ?)
-    `);
+    try {
+      const peopleStmt = this.db.prepare(`
+        INSERT OR IGNORE INTO people (id, name, bio) 
+        VALUES (?, ?, ?)
+      `);
+      
+      const positionsStmt = this.db.prepare(`
+        INSERT OR REPLACE INTO board_positions (
+          id, company_id, person_id, position, appointed_date
+        ) VALUES (?, ?, ?, ?, ?)
+      `);
 
-    const allDirectors = new Map();
-    const allPositions = [];
+      const allDirectors = new Map();
+      const allPositions = [];
 
-    // Extract all unique directors and their positions
-    companiesWithDirectors.forEach(company => {
-      company.directors.forEach(director => {
-        const directorId = `person_${director.name.toLowerCase().replace(/\s+/g, '_')}`;
-        allDirectors.set(directorId, {
-          id: directorId,
-          name: director.name,
-          bio: director.bioUrl || null
-        });
+      // Extract all unique directors and their positions
+      companiesWithDirectors.forEach(company => {
+        if (company.directors && company.directors.length > 0) {
+          company.directors.forEach(director => {
+            const directorId = `person_${director.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
+            allDirectors.set(directorId, {
+              id: directorId,
+              name: director.name,
+              bio: director.bioUrl || null
+            });
 
-        allPositions.push({
-          id: `pos_${company.ticker}_${directorId}`,
-          companyId: company.ticker,
-          personId: directorId,
-          position: director.position,
-          appointedDate: director.appointmentDate || null
-        });
+            allPositions.push({
+              id: `pos_${company.ticker}_${directorId}`,
+              companyId: company.ticker,
+              personId: directorId,
+              position: director.position || 'Director',
+              appointedDate: director.appointmentDate || null
+            });
+          });
+        }
       });
-    });
 
-    // Batch insert directors
-    const peopleBatch = Array.from(allDirectors.values()).map(person =>
-      peopleStmt.bind(person.id, person.name, person.bio)
-    );
+      console.log(`👥 Processing ${allDirectors.size} directors and ${allPositions.length} positions`);
 
-    // Batch insert positions
-    const positionsBatch = allPositions.map(pos =>
-      positionsStmt.bind(pos.id, pos.companyId, pos.personId, pos.position, pos.appointedDate)
-    );
+      // Insert directors first
+      if (allDirectors.size > 0) {
+        const peopleBatch = Array.from(allDirectors.values()).map(person =>
+          peopleStmt.bind(person.id, person.name, person.bio)
+        );
+        const peopleResults = await this.db.batch(peopleBatch);
+        console.log(`✅ Inserted ${peopleResults.length} directors`);
+      }
 
-    const [peopleResults, positionsResults] = await Promise.all([
-      this.db.batch(peopleBatch),
-      this.db.batch(positionsBatch)
-    ]);
+      // Then insert positions (after directors exist)
+      if (allPositions.length > 0) {
+        const positionsBatch = allPositions.map(pos =>
+          positionsStmt.bind(pos.id, pos.companyId, pos.personId, pos.position, pos.appointedDate)
+        );
+        const positionsResults = await this.db.batch(positionsBatch);
+        console.log(`✅ Inserted ${positionsResults.length} positions`);
+        
+        return {
+          success: true,
+          peopleProcessed: allDirectors.size,
+          positionsProcessed: positionsResults.length
+        };
+      }
 
-    return {
-      success: true,
-      peopleProcessed: peopleResults.length,
-      positionsProcessed: positionsResults.length
-    };
+      return {
+        success: true,
+        peopleProcessed: allDirectors.size,
+        positionsProcessed: 0
+      };
+    } catch (error) {
+      console.error('❌ Error syncing directors:', error);
+      throw error;
+    }
   }
 
   // Get all companies with directors

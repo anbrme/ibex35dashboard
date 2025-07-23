@@ -5,13 +5,13 @@ compatibility_date = "2024-07-15"
 [[d1_databases]]
 binding = "DB"
 database_name = "ibex35-intelligence"
-database_id = "your-database-id"
+database_id = "d3003b66-214f-44f0-b0de-ef78b7264282"
 
 [env.production]
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "ibex35-intelligence"
-database_id = "your-production-database-id"
+database_id = "d3003b66-214f-44f0-b0de-ef78b7264282"
 
 # Scheduled data sync every hour
 [triggers]
