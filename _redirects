@@ -1,0 +1,11 @@
+# Redirects for Cloudflare Pages
+
+# SPA fallback - send all routes to index.html for client-side routing
+/*    /index.html   200
+
+# API redirects (if you have external APIs)
+/api/yahoo/*  https://finance.yahoo.com/:splat  200
+/api/news/*   https://newsapi.org/v2/:splat     200
+
+# Old URL redirects (if migrating from another domain)
+# /old-path  /new-path  301
