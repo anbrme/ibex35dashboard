@@ -21,13 +21,15 @@ export interface SecureAPIResponse {
 }
 
 export class SecureGoogleSheetsService {
-  private static readonly API_BASE_URL = window.location.origin;
+  // Your existing Cloudflare Worker
+  private static readonly API_BASE_URL = 'https://anurnberg.workers.dev';
   
   static async fetchRealIBEXData(): Promise<SecureIBEXCompanyData[]> {
     try {
       console.log('🔒 Fetching data from secure backend...');
+      console.log('📡 API URL:', this.API_BASE_URL);
       
-      const response = await fetch(`${this.API_BASE_URL}/api/sheets-secure`, {
+      const response = await fetch(`${this.API_BASE_URL}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -53,6 +55,8 @@ export class SecureGoogleSheetsService {
       
     } catch (error) {
       console.error('❌ Error fetching from secure backend:', error);
+      console.log('📡 Failed URL:', this.API_BASE_URL);
+      console.log('💡 Please check your Cloudflare Worker is deployed and the URL is correct');
       
       // Fallback to mock data if backend fails
       console.log('🔄 Falling back to mock data...');
@@ -63,7 +67,7 @@ export class SecureGoogleSheetsService {
   // Test connection to backend
   static async testConnection(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.API_BASE_URL}/api/sheets-secure`, {
+      const response = await fetch(`${this.API_BASE_URL}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
