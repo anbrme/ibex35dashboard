@@ -2,8 +2,24 @@ name = "ibex35-sheets-api"
 main = "src/index.js"
 compatibility_date = "2024-07-15"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "ibex35-intelligence"
+database_id = "your-database-id"
+
+[env.production]
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "ibex35-intelligence"
+database_id = "your-production-database-id"
+
+# Scheduled data sync every hour
+[triggers]
+crons = ["0 * * * *"]
+
 [vars]
 GOOGLE_SHEET_ID = "11rpmdk6jWqwueio-aTJYoFBiNCmlnLhZ7jHPbvPrEJ0"
+WORKER_URL = "https://ibex35-sheets-api.your-subdomain.workers.dev"
 
 # Environment secrets (set via wrangler secret put)
 # GOOGLE_SERVICE_ACCOUNT_EMAIL

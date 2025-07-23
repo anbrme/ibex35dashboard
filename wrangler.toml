@@ -13,7 +13,3 @@ database_id = "your-database-id"
 binding = "DB"
 database_name = "ibex35-intelligence"
 database_id = "your-production-database-id"
-
-# Scheduled data sync every hour
-[triggers]
-crons = ["0 * * * *"]

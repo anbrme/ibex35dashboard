@@ -48,10 +48,14 @@ curl -X POST "https://your-worker.your-subdomain.workers.dev/api/sync"
 ```
 
 ### 5. Set Up Cron Jobs (Optional)
-The worker is configured to sync data every hour automatically. Enable cron triggers:
+The worker is configured to sync data every hour automatically. Deploy with cron support:
 ```bash
-wrangler deploy --triggers
+# Deploy from the worker directory
+cd worker
+wrangler deploy
 ```
+
+**Note**: Cloudflare Pages doesn't support cron triggers, so the cron job runs on the separate Worker instance.
 
 ## API Endpoints
 

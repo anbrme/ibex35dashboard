@@ -4,13 +4,14 @@
 import { DatabaseService } from './database.js';
 
 export default {
+  // Handle HTTP requests
   async fetch(request, env) {
     // CORS preflight handling
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Cache-Control, Accept',
           'Access-Control-Max-Age': '86400',
         }
@@ -59,6 +60,58 @@ export default {
     } catch (error) {
       console.error('💥 Database error:', error.message);
       return createErrorResponse(`Database error: ${error.message}`, 500);
+    }
+  },
+
+  // Handle scheduled events (cron)
+  async scheduled(event, env, ctx) {
+    console.log('🕐 Starting scheduled data sync...');
+    
+    try {
+      const db = new DatabaseService(env.DB);
+      
+      // Fetch fresh data from Google Sheets
+      const companiesData = await fetchFromGoogleSheets(env);
+      
+      // Sync to D1
+      const companiesResult = await db.syncCompaniesData(companiesData);
+      const directorsResult = await db.syncDirectorsData(companiesData);
+      
+      // Log sync operation
+      await db.logSyncOperation('scheduled_sync', companiesData.length, 'completed');
+      
+      console.log('✅ Scheduled sync completed:', {
+        companies: companiesResult.recordsProcessed,
+        directors: directorsResult.peopleProcessed
+      });
+
+      // Optional: Send notification or log to external service
+      if (env.SLACK_WEBHOOK_URL) {
+        await fetch(env.SLACK_WEBHOOK_URL, {
+          method: 'POST',  
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: `IBEX 35 Scheduled Sync Complete: ${companiesResult.recordsProcessed} companies, ${directorsResult.peopleProcessed} directors`
+          })
+        });
+      }
+
+    } catch (error) {
+      console.error('💥 Scheduled sync failed:', error);
+      
+      const db = new DatabaseService(env.DB);
+      await db.logSyncOperation('scheduled_sync', 0, 'failed', error.message);
+      
+      // Send error notification
+      if (env.SLACK_WEBHOOK_URL) {
+        await fetch(env.SLACK_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: `❌ IBEX 35 Scheduled Sync Failed: ${error.message}`
+          })
+        });
+      }
     }
   }
 };
