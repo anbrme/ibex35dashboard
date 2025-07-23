@@ -29,19 +29,20 @@ export interface SecureAPIResponse {
 }
 
 export class SecureGoogleSheetsService {
-  // Use dedicated Cloudflare Worker
+  // Use D1-powered Cloudflare Worker
   private static readonly API_BASE_URL = 'https://ibex35-sheets-api.anurnberg.workers.dev';
   
   static async fetchRealIBEXData(): Promise<SecureIBEXCompanyData[]> {
     try {
-      console.log('🔒 Fetching data from secure backend...');
+      console.log('🔒 Fetching data from D1-powered backend...');
       console.log('📡 API URL:', this.API_BASE_URL);
       
-      const response = await fetch(this.API_BASE_URL, {
+      // Try D1 endpoint first (fast)
+      const response = await fetch(`${this.API_BASE_URL}/api/companies`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'max-age=60' // 1-minute client cache
         }
       });
 
@@ -72,10 +73,53 @@ export class SecureGoogleSheetsService {
     }
   }
 
+  // Sync data from Google Sheets to D1 database
+  static async syncData(): Promise<boolean> {
+    try {
+      console.log('🔄 Triggering data sync...');
+      const response = await fetch(`${this.API_BASE_URL}/api/sync`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Data sync completed:', result);
+        return result.success;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('❌ Data sync failed:', error);
+      return false;
+    }
+  }
+
+  // Get network data for visualization
+  static async getNetworkData(selectedTickers: string[] = []): Promise<any[]> {
+    try {
+      const tickersParam = selectedTickers.length > 0 ? `?tickers=${selectedTickers.join(',')}` : '';
+      const response = await fetch(`${this.API_BASE_URL}/api/network${tickersParam}`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        return result.data || [];
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('❌ Network data fetch failed:', error);
+      return [];
+    }
+  }
+
   // Test connection to backend
   static async testConnection(): Promise<boolean> {
     try {
-      const response = await fetch(this.API_BASE_URL, {
+      const response = await fetch(`${this.API_BASE_URL}/api/companies`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });

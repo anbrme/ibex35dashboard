@@ -1,5 +1,7 @@
-// Dedicated Cloudflare Worker for IBEX 35 Google Sheets API
-// More reliable than Pages Functions
+// Dedicated Cloudflare Worker for IBEX 35 with D1 Database
+// More reliable than Pages Functions with database caching
+
+import { DatabaseService } from './database.js';
 
 export default {
   async fetch(request, env) {
@@ -15,96 +17,236 @@ export default {
       });
     }
 
+    // Initialize database service
+    const db = new DatabaseService(env.DB);
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // Route handling
+    if (path === '/api/companies') {
+      return handleGetCompanies(db, request);
+    } else if (path === '/api/sync') {
+      return handleDataSync(db, env, request);
+    } else if (path === '/api/network') {
+      return handleNetworkData(db, request);
+    } else if (path === '/api/status') {
+      return handleSyncStatus(db);
+    }
+
+    // Default: return companies (backward compatibility)
     if (request.method !== 'GET') {
       return createErrorResponse('Method not allowed', 405);
     }
 
     try {
-      console.log('🚀 Starting IBEX 35 data fetch...');
-      
-      // Validate environment variables
-      const SERVICE_ACCOUNT_EMAIL = env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-      const PRIVATE_KEY = env.GOOGLE_PRIVATE_KEY;
-      const SHEET_ID = env.GOOGLE_SHEET_ID;
-      
-      if (!SERVICE_ACCOUNT_EMAIL || !PRIVATE_KEY || !SHEET_ID) {
-        console.error('❌ Missing environment variables:', {
-          hasEmail: !!SERVICE_ACCOUNT_EMAIL,
-          hasKey: !!PRIVATE_KEY,
-          hasSheetId: !!SHEET_ID
-        });
-        return createErrorResponse('Server configuration error - missing credentials', 500);
-      }
-
-      console.log(`🔐 Using service account: ${SERVICE_ACCOUNT_EMAIL}`);
-      console.log(`📊 Sheet ID: ${SHEET_ID}`);
-      
-      // Create JWT for service account authentication
-      const jwt = await createServiceAccountJWT(SERVICE_ACCOUNT_EMAIL, PRIVATE_KEY);
-      console.log('✅ JWT created successfully');
-      
-      // Exchange JWT for access token
-      const accessToken = await getAccessToken(jwt);
-      console.log('✅ Access token obtained');
-      
-      // Fetch data from both sheets
-      console.log('📋 Fetching companies from Sheet1...');
-      const companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:G');
-      
-      console.log('👥 Fetching directors from Directors sheet...');
-      let directorsData;
-      
-      // Try multiple approaches to access the Directors sheet
-      const directorsAttempts = [
-        'Directors!A2:E',
-        'Directors!A1:E', 
-        'Directors!A:E',
-        "'Directors'!A2:E",  // With quotes
-        'Sheet2!A2:E'        // Try by position
-      ];
-      
-      for (let i = 0; i < directorsAttempts.length; i++) {
-        const range = directorsAttempts[i];
-        try {
-          console.log(`🔍 Attempting to fetch directors with range: ${range}`);
-          directorsData = await fetchGoogleSheetsData(SHEET_ID, accessToken, range);
-          console.log(`✅ Successfully fetched directors with range: ${range}`);
-          break;
-        } catch (error) {
-          console.warn(`⚠️ Failed to fetch with range ${range}:`, error.message);
-          if (i === directorsAttempts.length - 1) {
-            console.error('❌ All attempts to fetch Directors sheet failed');
-            directorsData = { values: [] };
-          }
-        }
-      }
-      
-      console.log(`📋 Companies data rows: ${companiesData.values?.length || 0}`);
-      console.log(`👥 Directors data rows: ${directorsData.values?.length || 0}`);
-      
-      // Transform and validate data
-      const companies = transformSheetsData(companiesData, directorsData);
-      console.log(`✅ Successfully processed ${companies.length} companies with directors`);
+      console.log('🚀 Getting IBEX 35 data from D1...');
+      const companies = await db.getAllCompaniesWithDirectors();
       
       return new Response(JSON.stringify({
         success: true,
         data: companies,
         count: companies.length,
         lastUpdated: new Date().toISOString(),
-        source: 'cloudflare-worker-service-account'
+        source: 'd1-database'
       }), {
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'public, max-age=300, s-max-age=300', // 5-minute cache
+          'Cache-Control': 'public, max-age=60, s-max-age=60', // 1-minute cache
         }
       });
 
     } catch (error) {
-      console.error('💥 Worker error:', error.message);
-      console.error('Stack:', error.stack);
-      return createErrorResponse(`Authentication failed: ${error.message}`, 500);
+      console.error('💥 Database error:', error.message);
+      return createErrorResponse(`Database error: ${error.message}`, 500);
     }
+  }
+};
+
+// Handle /api/companies endpoint
+async function handleGetCompanies(db, request) {
+  try {
+    const companies = await db.getAllCompaniesWithDirectors();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: companies,
+      count: companies.length,
+      lastUpdated: new Date().toISOString(),
+      source: 'd1-database'
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=60, s-max-age=60',
+      }
+    });
+  } catch (error) {
+    return createErrorResponse(`Database error: ${error.message}`, 500);
+  }
+}
+
+// Handle /api/sync endpoint - sync from Google Sheets to D1
+async function handleDataSync(db, env, request) {
+  if (request.method !== 'POST') {
+    return createErrorResponse('Sync endpoint requires POST method', 405);
+  }
+
+  try {
+    console.log('🔄 Starting data sync from Google Sheets to D1...');
+    
+    // Fetch fresh data from Google Sheets
+    const companiesData = await fetchFromGoogleSheets(env);
+    
+    // Sync to D1
+    const companiesResult = await db.syncCompaniesData(companiesData);
+    const directorsResult = await db.syncDirectorsData(companiesData);
+    
+    // Log sync operation
+    await db.logSyncOperation('full_sync', companiesData.length, 'completed');
+    
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Data sync completed',
+      results: {
+        companies: companiesResult,
+        directors: directorsResult
+      },
+      timestamp: new Date().toISOString()
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
+    });
+    
+  } catch (error) {
+    console.error('💥 Sync error:', error.message);
+    await db.logSyncOperation('full_sync', 0, 'failed', error.message);
+    return createErrorResponse(`Sync failed: ${error.message}`, 500);
+  }
+}
+
+// Handle /api/network endpoint
+async function handleNetworkData(db, request) {
+  try {
+    const url = new URL(request.url);
+    const tickers = url.searchParams.get('tickers');
+    const selectedTickers = tickers ? tickers.split(',') : [];
+    
+    const networkData = await db.getNetworkData(selectedTickers);
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: networkData,
+      selectedTickers,
+      timestamp: new Date().toISOString()
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=300, s-max-age=300',
+      }
+    });
+  } catch (error) {
+    return createErrorResponse(`Network data error: ${error.message}`, 500);
+  }
+}
+
+// Handle /api/status endpoint
+async function handleSyncStatus(db) {
+  try {
+    const syncStatus = await db.getLatestSyncStatus();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      syncStatus,
+      timestamp: new Date().toISOString()
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
+    });
+  } catch (error) {
+    return createErrorResponse(`Status error: ${error.message}`, 500);
+  }
+}
+
+// Fetch data from Google Sheets (original logic)
+async function fetchFromGoogleSheets(env) {
+  try {
+    console.log('🚀 Starting fresh Google Sheets fetch...');
+        
+    // Validate environment variables
+    const SERVICE_ACCOUNT_EMAIL = env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const PRIVATE_KEY = env.GOOGLE_PRIVATE_KEY;
+    const SHEET_ID = env.GOOGLE_SHEET_ID;
+    
+    if (!SERVICE_ACCOUNT_EMAIL || !PRIVATE_KEY || !SHEET_ID) {
+      console.error('❌ Missing environment variables:', {
+        hasEmail: !!SERVICE_ACCOUNT_EMAIL,
+        hasKey: !!PRIVATE_KEY,
+        hasSheetId: !!SHEET_ID
+      });
+      throw new Error('Server configuration error - missing credentials');
+    }
+
+    console.log(`🔐 Using service account: ${SERVICE_ACCOUNT_EMAIL}`);
+    console.log(`📊 Sheet ID: ${SHEET_ID}`);
+    
+    // Create JWT for service account authentication
+    const jwt = await createServiceAccountJWT(SERVICE_ACCOUNT_EMAIL, PRIVATE_KEY);
+    console.log('✅ JWT created successfully');
+    
+    // Exchange JWT for access token
+    const accessToken = await getAccessToken(jwt);
+    console.log('✅ Access token obtained');
+    
+    // Fetch data from both sheets
+    console.log('📋 Fetching companies from Sheet1...');
+    const companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:G');
+    
+    console.log('👥 Fetching directors from Directors sheet...');
+    let directorsData;
+    
+    // Try multiple approaches to access the Directors sheet
+    const directorsAttempts = [
+      'Directors!A2:E',
+      'Directors!A1:E', 
+      'Directors!A:E',
+      "'Directors'!A2:E",  // With quotes
+      'Sheet2!A2:E'        // Try by position
+    ];
+    
+    for (let i = 0; i < directorsAttempts.length; i++) {
+      const range = directorsAttempts[i];
+      try {
+        console.log(`🔍 Attempting to fetch directors with range: ${range}`);
+        directorsData = await fetchGoogleSheetsData(SHEET_ID, accessToken, range);
+        console.log(`✅ Successfully fetched directors with range: ${range}`);
+        break;
+      } catch (error) {
+        console.warn(`⚠️ Failed to fetch with range ${range}:`, error.message);
+        if (i === directorsAttempts.length - 1) {
+          console.error('❌ All attempts to fetch Directors sheet failed');
+          directorsData = { values: [] };
+        }
+      }
+    }
+    
+    console.log(`📋 Companies data rows: ${companiesData.values?.length || 0}`);
+    console.log(`👥 Directors data rows: ${directorsData.values?.length || 0}`);
+    
+    // Transform and validate data
+    const companies = transformSheetsData(companiesData, directorsData);
+    console.log(`✅ Successfully processed ${companies.length} companies with directors`);
+    
+    // Return the transformed data
+    return companies;
+  } catch (error) {
+    console.error('💥 Google Sheets fetch error:', error.message);
+    throw error;
   }
 };
 

@@ -1,7 +1,7 @@
-import { WorkingDashboard } from './components/WorkingDashboard';
+import { EnhancedDashboard } from './components/EnhancedDashboard';
 
 function App() {
-  return <WorkingDashboard />;
+  return <EnhancedDashboard />;
 }
 
 export default App;
