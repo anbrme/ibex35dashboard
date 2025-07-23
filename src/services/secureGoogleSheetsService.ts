@@ -265,4 +265,14 @@ export class SecureGoogleSheetsService {
       changePercent: Math.round(changePercent * 100) / 100
     };
   }
+
+  // Helper method to safely format numbers that might be null/undefined
+  static safeToFixed(value: number | null | undefined, decimals: number = 2): string {
+    return (value || 0).toFixed(decimals);
+  }
+
+  // Helper method to safely format currency that might be null/undefined
+  static safeCurrency(value: number | null | undefined, decimals: number = 2): string {
+    return `€${this.safeToFixed(value, decimals)}`;
+  }
 }

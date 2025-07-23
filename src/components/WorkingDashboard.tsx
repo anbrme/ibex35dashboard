@@ -152,7 +152,7 @@ export function WorkingDashboard() {
                 <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <h3 className="font-semibold text-blue-900">{selectedCompany.company}</h3>
                   <p className="text-sm text-blue-700">{selectedCompany.sector}</p>
-                  <p className="text-sm text-blue-700">€{selectedCompany.currentPriceEur.toFixed(2)}</p>
+                  <p className="text-sm text-blue-700">€{(selectedCompany.currentPriceEur || 0).toFixed(2)}</p>
                   <button
                     onClick={() => setSelectedCompany(null)}
                     className="mt-2 text-xs text-blue-600 hover:text-blue-800"
@@ -177,7 +177,7 @@ export function WorkingDashboard() {
                     <h3 className="font-medium text-gray-900 text-sm">{company.company}</h3>
                     <p className="text-xs text-gray-600">{company.sector}</p>
                     <div className="flex justify-between items-center mt-1">
-                      <span className="text-xs font-semibold">€{company.currentPriceEur.toFixed(2)}</span>
+                      <span className="text-xs font-semibold">€{(company.currentPriceEur || 0).toFixed(2)}</span>
                       <span className="text-xs text-gray-500">
                         {company.directors.length} directors
                       </span>

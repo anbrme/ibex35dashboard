@@ -67,7 +67,7 @@ const CompanyRow = React.memo(({ company, isSelected, onToggle }: {
             <span className="ml-2 text-sm text-gray-600">{company.company}</span>
           </div>
           <div className="text-right">
-            <div className="font-medium">€{company.currentPriceEur.toFixed(2)}</div>
+            <div className="font-medium">{SecureGoogleSheetsService.safeCurrency(company.currentPriceEur)}</div>
             <div className={`text-sm ${mockChange.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {mockChange.changePercent >= 0 ? '+' : ''}{mockChange.changePercent.toFixed(2)}%
             </div>
@@ -261,9 +261,9 @@ export function EnhancedDashboard() {
     }
     
     return {
-      totalMarketCap: selected.reduce((sum, c) => sum + c.marketCapEur, 0),
-      avgPrice: selected.reduce((sum, c) => sum + c.currentPriceEur, 0) / selected.length,
-      totalVolume: selected.reduce((sum, c) => sum + c.volumeEur, 0),
+      totalMarketCap: selected.reduce((sum, c) => sum + (c.marketCapEur || 0), 0),
+      avgPrice: selected.reduce((sum, c) => sum + (c.currentPriceEur || 0), 0) / selected.length,
+      totalVolume: selected.reduce((sum, c) => sum + (c.volumeEur || 0), 0),
       totalDirectors: selected.reduce((sum, c) => sum + c.directors.length, 0)
     };
   }, [companies, selectedCompanyIds]);
@@ -375,15 +375,15 @@ export function EnhancedDashboard() {
           <div className="grid grid-cols-4 gap-4">
             <div>
               <div className="text-sm text-gray-600">Market Cap</div>
-              <div className="text-xl font-bold">€{(metrics.totalMarketCap / 1e9).toFixed(1)}B</div>
+              <div className="text-xl font-bold">€{((metrics.totalMarketCap || 0) / 1e9).toFixed(1)}B</div>
             </div>
             <div>
               <div className="text-sm text-gray-600">Avg Price</div>
-              <div className="text-xl font-bold">€{metrics.avgPrice.toFixed(2)}</div>
+              <div className="text-xl font-bold">€{(metrics.avgPrice || 0).toFixed(2)}</div>
             </div>
             <div>
               <div className="text-sm text-gray-600">Total Volume</div>
-              <div className="text-xl font-bold">€{(metrics.totalVolume / 1e6).toFixed(1)}M</div>
+              <div className="text-xl font-bold">€{((metrics.totalVolume || 0) / 1e6).toFixed(1)}M</div>
             </div>
             <div>
               <div className="text-sm text-gray-600">Directors</div>
