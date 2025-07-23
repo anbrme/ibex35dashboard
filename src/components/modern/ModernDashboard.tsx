@@ -237,7 +237,10 @@ export function ModernDashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ delay: 0.6 }}
-              className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4"
+              className="grid gap-4"
+              style={{
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
+              }}
             >
               {sortedCompanies.map((company, index) => (
                 <ModernCompanyCard

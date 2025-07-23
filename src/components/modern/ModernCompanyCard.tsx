@@ -67,9 +67,9 @@ export function ModernCompanyCard({ company, onClick, index = 0 }: ModernCompany
         transition: { duration: 0.2 }
       }}
       onClick={onClick}
-      className="group cursor-pointer"
+      className="group cursor-pointer w-full max-w-xs"
     >
-      <div className={`relative overflow-hidden bg-gradient-to-br ${getSectorColor(company.sector)} rounded-xl border border-white/10 backdrop-blur-sm w-full max-w-sm mx-auto`}>
+      <div className={`relative overflow-hidden bg-gradient-to-br ${getSectorColor(company.sector)} rounded-xl border border-white/10 backdrop-blur-sm`}>
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-5">
           <div className="h-full w-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent_50%)]"></div>
