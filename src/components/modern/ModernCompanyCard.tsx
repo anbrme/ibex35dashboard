@@ -29,19 +29,32 @@ export function ModernCompanyCard({ company, onClick, index = 0 }: ModernCompany
 
   const getSectorColor = (sector: string): string => {
     const colors: Record<string, string> = {
-      'Financials': 'from-blue-500/20 to-blue-600/20 border-blue-500/30',
-      'Technology': 'from-purple-500/20 to-purple-600/20 border-purple-500/30',
-      'Healthcare': 'from-green-500/20 to-green-600/20 border-green-500/30',
-      'Energy': 'from-orange-500/20 to-orange-600/20 border-orange-500/30',
-      'Utilities': 'from-yellow-500/20 to-yellow-600/20 border-yellow-500/30',
-      'Industrials': 'from-gray-500/20 to-gray-600/20 border-gray-500/30',
-      'Consumer Discretionary': 'from-pink-500/20 to-pink-600/20 border-pink-500/30',
-      'Consumer Staples': 'from-emerald-500/20 to-emerald-600/20 border-emerald-500/30',
-      'Materials': 'from-amber-500/20 to-amber-600/20 border-amber-500/30',
-      'Real Estate': 'from-indigo-500/20 to-indigo-600/20 border-indigo-500/30',
-      'Telecommunications': 'from-cyan-500/20 to-cyan-600/20 border-cyan-500/30',
+      'Financial Services': 'from-blue-400/15 to-blue-500/15 border-blue-400/25',
+      'Technology': 'from-purple-400/15 to-purple-500/15 border-purple-400/25',
+      'Healthcare': 'from-green-400/15 to-green-500/15 border-green-400/25',
+      'Energy': 'from-orange-400/15 to-orange-500/15 border-orange-400/25',
+      'Utilities': 'from-yellow-400/15 to-yellow-500/15 border-yellow-400/25',
+      'Construction': 'from-gray-400/15 to-gray-500/15 border-gray-400/25',
+      'Infrastructure': 'from-slate-400/15 to-slate-500/15 border-slate-400/25',
+      'Consumer Discretionary': 'from-pink-400/15 to-pink-500/15 border-pink-400/25',
+      'Consumer Staples': 'from-emerald-400/15 to-emerald-500/15 border-emerald-400/25',
+      'Materials': 'from-amber-400/15 to-amber-500/15 border-amber-400/25',
+      'Real Estate': 'from-indigo-400/15 to-indigo-500/15 border-indigo-400/25',
+      'Telecommunications': 'from-cyan-400/15 to-cyan-500/15 border-cyan-400/25',
+      'Steel': 'from-zinc-400/15 to-zinc-500/15 border-zinc-400/25',
+      'Tourism': 'from-teal-400/15 to-teal-500/15 border-teal-400/25',
+      'Aviation': 'from-sky-400/15 to-sky-500/15 border-sky-400/25',
+      'Information Technology': 'from-violet-400/15 to-violet-500/15 border-violet-400/25',
+      'Textile': 'from-rose-400/15 to-rose-500/15 border-rose-400/25',
+      'Logistics': 'from-lime-400/15 to-lime-500/15 border-lime-400/25',
+      'Insurance': 'from-blue-400/15 to-blue-500/15 border-blue-400/25',
+      'Manufacturing': 'from-neutral-400/15 to-neutral-500/15 border-neutral-400/25',
+      'Pharmaceuticals': 'from-green-400/15 to-green-500/15 border-green-400/25',
+      'Oil and Gas': 'from-orange-400/15 to-orange-500/15 border-orange-400/25',
+      'Solar Energy': 'from-yellow-400/15 to-yellow-500/15 border-yellow-400/25',
+      'Clothes and Cosmetics': 'from-pink-400/15 to-pink-500/15 border-pink-400/25',
     };
-    return colors[sector] || 'from-primary-500/20 to-primary-600/20 border-primary-500/30';
+    return colors[sector] || 'from-primary-400/15 to-primary-500/15 border-primary-400/25';
   };
 
   return (
@@ -56,7 +69,7 @@ export function ModernCompanyCard({ company, onClick, index = 0 }: ModernCompany
       onClick={onClick}
       className="group cursor-pointer"
     >
-      <div className={`relative overflow-hidden bg-gradient-to-br ${getSectorColor(company.sector)} rounded-xl border border-white/10 backdrop-blur-sm`}>
+      <div className={`relative overflow-hidden bg-gradient-to-br ${getSectorColor(company.sector)} rounded-xl border border-white/10 backdrop-blur-sm w-full max-w-sm mx-auto`}>
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-5">
           <div className="h-full w-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent_50%)]"></div>
@@ -145,19 +158,19 @@ export function ModernCompanyCard({ company, onClick, index = 0 }: ModernCompany
               </div>
             </div>
             
-            {/* Directors Preview */}
+            {/* Directors Preview - Move above grid */}
             {company.directors.length > 0 && (
-              <div className="mb-2">
-                <div className="text-xs text-blue-300 mb-1">Top Directors:</div>
+              <div className="mb-3 p-2 bg-blue-500/10 rounded border border-blue-500/20">
+                <div className="text-xs text-blue-300 mb-2 font-medium">👥 Directors ({company.directors.length}):</div>
                 <div className="space-y-1">
                   {company.directors.slice(0, 2).map((director, idx) => (
-                    <div key={idx} className="text-xs text-gray-300 flex justify-between">
-                      <span className="truncate flex-1 mr-2">{director.name}</span>
-                      <span className="text-gray-500 text-xs">{director.position}</span>
+                    <div key={idx} className="text-xs">
+                      <div className="text-gray-200 font-medium truncate">{director.name}</div>
+                      <div className="text-gray-400 text-xs">{director.position}</div>
                     </div>
                   ))}
                   {company.directors.length > 2 && (
-                    <div className="text-xs text-gray-500">+{company.directors.length - 2} more</div>
+                    <div className="text-xs text-blue-400">+{company.directors.length - 2} more directors</div>
                   )}
                 </div>
               </div>

@@ -185,23 +185,23 @@ export function ModernDashboard() {
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-primary-400" />
               <input
                 type="text"
                 placeholder="Search companies..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-dark-800/50 border border-white/10 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                className="w-full pl-10 pr-4 py-2.5 bg-dark-800/60 border border-white/20 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-400/50 focus:border-primary-400/50 transition-all backdrop-blur-sm"
               />
             </div>
             
             {/* Sector Filter */}
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-primary-400" />
               <select
                 value={selectedSector}
                 onChange={(e) => setSelectedSector(e.target.value)}
-                className="pl-10 pr-8 py-3 bg-dark-800/50 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all appearance-none cursor-pointer"
+                className="pl-10 pr-8 py-2.5 bg-dark-800/60 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-400/50 focus:border-primary-400/50 transition-all appearance-none cursor-pointer backdrop-blur-sm"
               >
                 {sectors.map(sector => (
                   <option key={sector} value={sector} className="bg-dark-800">
@@ -215,7 +215,7 @@ export function ModernDashboard() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'company' | 'currentPriceEur' | 'marketCapEur')}
-              className="px-4 py-3 bg-dark-800/50 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all appearance-none cursor-pointer"
+              className="px-4 py-2.5 bg-dark-800/60 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-400/50 focus:border-primary-400/50 transition-all appearance-none cursor-pointer backdrop-blur-sm"
             >
               <option value="marketCapEur" className="bg-dark-800">Sort by Market Cap</option>
               <option value="currentPriceEur" className="bg-dark-800">Sort by Price</option>
@@ -237,7 +237,7 @@ export function ModernDashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ delay: 0.6 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4"
+              className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4"
             >
               {sortedCompanies.map((company, index) => (
                 <ModernCompanyCard
@@ -245,8 +245,7 @@ export function ModernDashboard() {
                   company={company}
                   index={index}
                   onClick={() => {
-                    // TODO: Open company details modal
-                    console.log('Open details for:', company.company);
+                    alert(`Opening comprehensive analysis for ${company.company}\n\nFeatures coming soon:\n• Complete director network\n• Shareholder analysis\n• Lobbying activities\n• Recent news\n• Regulatory filings`);
                   }}
                 />
               ))}
