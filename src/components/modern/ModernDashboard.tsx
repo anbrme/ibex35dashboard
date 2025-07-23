@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Search, LineChart, Building, BarChart2 } from 'lucide-react';
+import { Search, Building } from 'lucide-react';
 import { ModernCompanyCard } from './ModernCompanyCard';
 import { useSecureIbex35Data } from '../../hooks/useSecureIbex35Data';
 import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 import { Ibex35Metrics } from './Ibex35Metrics';
+import { VisualizationPanel } from '../charts/VisualizationPanel';
 
 export function ModernDashboard() {
   const { companies, loading } = useSecureIbex35Data();
@@ -44,19 +45,25 @@ export function ModernDashboard() {
   return (
     <div className="flex h-screen bg-background font-sans text-foreground">
       {/* Left Column: Company List */}
-      <aside className="w-[380px] border-r border-border flex flex-col">
-        <div className="p-4 border-b border-border">
-          <h1 className="text-xl font-semibold">IBEX 35</h1>
-          <p className="text-sm text-muted-foreground">Spain's premier stock index</p>
-          <div className="relative mt-3">
+      <aside className="w-[380px] border-r border-border flex flex-col bg-card">
+        <div className="p-6 border-b border-border bg-gradient-to-r from-primary/5 to-primary/10">
+          <div className="flex items-center gap-3 mb-2">
+            <Building className="w-6 h-6 text-primary" />
+            <h1 className="text-xl font-bold text-card-foreground">IBEX 35</h1>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">Spain's premier stock index</p>
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search by company or ticker..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border rounded-lg bg-secondary text-sm"
+              className="w-full pl-9 pr-4 py-2.5 border rounded-lg bg-background text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
             />
+          </div>
+          <div className="mt-3 text-xs text-muted-foreground">
+            {filteredCompanies.length} of {companies.length} companies
           </div>
         </div>
         <div className="flex-grow overflow-y-auto">
@@ -80,23 +87,10 @@ export function ModernDashboard() {
           avgPrice={avgPrice}
           totalVolume={totalVolume}
         />
-        <div className="flex-grow p-6 flex flex-col items-center justify-center bg-muted/30">
-          <div className="text-center">
-            {selectedCompany ? 
-              <>
-                <BarChart2 className="w-16 h-16 text-muted-foreground/50 mx-auto" strokeWidth={1} />
-                <p className="mt-4 text-muted-foreground">
-                  Showing visualizations for <span className="font-semibold text-foreground">{selectedCompany.company}</span>
-                </p>
-              </>
-              :
-              <>
-                <LineChart className="w-16 h-16 text-muted-foreground/50 mx-auto" strokeWidth={1} />
-                <p className="mt-4 text-muted-foreground">Select a company to view detailed visualizations</p>
-              </>
-            }
-          </div>
-        </div>
+        <VisualizationPanel 
+          companies={companies}
+          selectedCompany={selectedCompany}
+        />
       </main>
     </div>
   );

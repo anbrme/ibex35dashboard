@@ -13,10 +13,12 @@
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.11",
     "@types/cheerio": "^0.22.35",
+    "@types/d3": "^7.4.3",
     "axios": "^1.10.0",
     "chart.js": "^4.5.0",
     "chartjs-adapter-date-fns": "^3.0.0",
     "cheerio": "^1.1.2",
+    "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.6",
     "googleapis": "^153.0.0",
