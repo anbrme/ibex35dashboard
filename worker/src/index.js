@@ -48,10 +48,36 @@ export default {
       console.log('✅ Access token obtained');
       
       // Fetch data from both sheets
-      const [companiesData, directorsData] = await Promise.all([
-        fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:G'),
-        fetchGoogleSheetsData(SHEET_ID, accessToken, 'Directors!A2:E')
-      ]);
+      console.log('📋 Fetching companies from Sheet1...');
+      const companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:G');
+      
+      console.log('👥 Fetching directors from Directors sheet...');
+      let directorsData;
+      
+      // Try multiple approaches to access the Directors sheet
+      const directorsAttempts = [
+        'Directors!A2:E',
+        'Directors!A1:E', 
+        'Directors!A:E',
+        "'Directors'!A2:E",  // With quotes
+        'Sheet2!A2:E'        // Try by position
+      ];
+      
+      for (let i = 0; i < directorsAttempts.length; i++) {
+        const range = directorsAttempts[i];
+        try {
+          console.log(`🔍 Attempting to fetch directors with range: ${range}`);
+          directorsData = await fetchGoogleSheetsData(SHEET_ID, accessToken, range);
+          console.log(`✅ Successfully fetched directors with range: ${range}`);
+          break;
+        } catch (error) {
+          console.warn(`⚠️ Failed to fetch with range ${range}:`, error.message);
+          if (i === directorsAttempts.length - 1) {
+            console.error('❌ All attempts to fetch Directors sheet failed');
+            directorsData = { values: [] };
+          }
+        }
+      }
       
       console.log(`📋 Companies data rows: ${companiesData.values?.length || 0}`);
       console.log(`👥 Directors data rows: ${directorsData.values?.length || 0}`);
@@ -256,6 +282,7 @@ function transformSheetsData(companiesData, directorsData) {
   });
   
   console.log(`👥 Processed directors for ${Object.keys(directorsByCompany).length} companies`);
+  console.log(`📋 Director company names found:`, Object.keys(directorsByCompany));
   
   // Process companies and match with directors
   const companies = companyRows
@@ -279,13 +306,38 @@ function transformSheetsData(companiesData, directorsData) {
           company.company.split(' ')[0] // First word only
         ];
         
+        console.log(`🔍 Trying to match company "${company.company}" with variations:`, companyNameVariations);
+        
+        // Also try reverse matching - check if company name appears in director company names
+        let matchedDirectors = null;
+        
+        // First try exact matches
         for (const variation of companyNameVariations) {
-          const matchedDirectors = directorsByCompany[variation];
-          if (matchedDirectors) {
-            company.directors = matchedDirectors;
-            console.log(`📋 Matched ${matchedDirectors.length} directors for ${company.company} (via "${variation}")`);
+          if (directorsByCompany[variation]) {
+            matchedDirectors = directorsByCompany[variation];
+            console.log(`📋 Exact match: ${matchedDirectors.length} directors for ${company.company} (via "${variation}")`);
             break;
           }
+        }
+        
+        // If no exact match, try partial matching
+        if (!matchedDirectors) {
+          for (const directorCompanyName of Object.keys(directorsByCompany)) {
+            for (const variation of companyNameVariations) {
+              // Check if company name appears in director company name (case insensitive)
+              if (directorCompanyName.toLowerCase().includes(variation.toLowerCase()) ||
+                  variation.toLowerCase().includes(directorCompanyName.toLowerCase())) {
+                matchedDirectors = directorsByCompany[directorCompanyName];
+                console.log(`📋 Partial match: ${matchedDirectors.length} directors for ${company.company} (${variation} ↔ ${directorCompanyName})`);
+                break;
+              }
+            }
+            if (matchedDirectors) break;
+          }
+        }
+        
+        if (matchedDirectors) {
+          company.directors = matchedDirectors;
         }
         
         return company;
