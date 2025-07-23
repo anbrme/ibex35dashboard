@@ -124,8 +124,12 @@ export function ModernCompanyCard({ company, onClick, index = 0 }: ModernCompany
           <div className="border-t border-white/10 pt-3">
             <div className="grid grid-cols-4 gap-1 mb-2">
               <div className="text-center">
-                <div className="w-2 h-2 bg-blue-400/20 rounded-full mx-auto mb-1"></div>
-                <div className="text-xs text-gray-500">Directors</div>
+                <div className={`w-2 h-2 rounded-full mx-auto mb-1 ${
+                  company.directors.length > 0 ? 'bg-blue-400' : 'bg-blue-400/20'
+                }`}></div>
+                <div className="text-xs text-gray-500">
+                  {company.directors.length > 0 ? `${company.directors.length}` : 'Directors'}
+                </div>
               </div>
               <div className="text-center">
                 <div className="w-2 h-2 bg-green-400/20 rounded-full mx-auto mb-1"></div>
@@ -140,6 +144,24 @@ export function ModernCompanyCard({ company, onClick, index = 0 }: ModernCompany
                 <div className="text-xs text-gray-500">News</div>
               </div>
             </div>
+            
+            {/* Directors Preview */}
+            {company.directors.length > 0 && (
+              <div className="mb-2">
+                <div className="text-xs text-blue-300 mb-1">Top Directors:</div>
+                <div className="space-y-1">
+                  {company.directors.slice(0, 2).map((director, idx) => (
+                    <div key={idx} className="text-xs text-gray-300 flex justify-between">
+                      <span className="truncate flex-1 mr-2">{director.name}</span>
+                      <span className="text-gray-500 text-xs">{director.position}</span>
+                    </div>
+                  ))}
+                  {company.directors.length > 2 && (
+                    <div className="text-xs text-gray-500">+{company.directors.length - 2} more</div>
+                  )}
+                </div>
+              </div>
+            )}
             
             <div className="text-xs text-center text-gray-500 group-hover:text-primary-400 transition-colors">
               Click for comprehensive analysis →

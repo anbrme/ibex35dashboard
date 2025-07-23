@@ -47,13 +47,18 @@ export default {
       const accessToken = await getAccessToken(jwt);
       console.log('✅ Access token obtained');
       
-      // Fetch data from Google Sheets
-      const sheetsData = await fetchGoogleSheetsData(SHEET_ID, accessToken);
-      console.log(`📋 Raw data rows: ${sheetsData.values?.length || 0}`);
+      // Fetch data from both sheets
+      const [companiesData, directorsData] = await Promise.all([
+        fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:G'),
+        fetchGoogleSheetsData(SHEET_ID, accessToken, 'Directors!A2:E')
+      ]);
+      
+      console.log(`📋 Companies data rows: ${companiesData.values?.length || 0}`);
+      console.log(`👥 Directors data rows: ${directorsData.values?.length || 0}`);
       
       // Transform and validate data
-      const companies = transformSheetsData(sheetsData);
-      console.log(`✅ Successfully processed ${companies.length} companies`);
+      const companies = transformSheetsData(companiesData, directorsData);
+      console.log(`✅ Successfully processed ${companies.length} companies with directors`);
       
       return new Response(JSON.stringify({
         success: true,
@@ -201,10 +206,10 @@ async function getAccessToken(jwt) {
 }
 
 // Fetch data from Google Sheets API
-async function fetchGoogleSheetsData(sheetId, accessToken) {
-  console.log('📊 Fetching data from Google Sheets...');
+async function fetchGoogleSheetsData(sheetId, accessToken, range = 'Sheet1!A2:G') {
+  console.log(`📊 Fetching data from Google Sheets range: ${range}`);
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A2:G?valueRenderOption=UNFORMATTED_VALUE`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueRenderOption=UNFORMATTED_VALUE`;
   
   const response = await fetch(url, {
     headers: {
@@ -221,14 +226,42 @@ async function fetchGoogleSheetsData(sheetId, accessToken) {
 }
 
 // Transform Google Sheets data to application format
-function transformSheetsData(sheetsData) {
-  const rows = sheetsData.values || [];
-  console.log(`🔄 Transforming ${rows.length} rows...`);
+function transformSheetsData(companiesData, directorsData) {
+  const companyRows = companiesData.values || [];
+  const directorRows = directorsData.values || [];
   
-  const companies = rows
+  console.log(`🔄 Transforming ${companyRows.length} companies and ${directorRows.length} directors...`);
+  
+  // Process directors data first
+  const directorsByCompany = {};
+  directorRows.forEach((row, index) => {
+    try {
+      const companyName = row[0]?.trim();
+      const director = {
+        name: row[1] || '',
+        position: row[2] || '',
+        appointmentDate: row[3] || '',
+        bioUrl: row[4] || ''
+      };
+      
+      if (companyName && director.name) {
+        if (!directorsByCompany[companyName]) {
+          directorsByCompany[companyName] = [];
+        }
+        directorsByCompany[companyName].push(director);
+      }
+    } catch (error) {
+      console.warn(`⚠️ Error parsing director row ${index + 2}:`, row, error.message);
+    }
+  });
+  
+  console.log(`👥 Processed directors for ${Object.keys(directorsByCompany).length} companies`);
+  
+  // Process companies and match with directors
+  const companies = companyRows
     .map((row, index) => {
       try {
-        return {
+        const company = {
           ticker: row[0] || '',
           company: row[1] || '',
           sector: row[2] || '',
@@ -236,9 +269,28 @@ function transformSheetsData(sheetsData) {
           currentPriceEur: parseFloat(row[4]) || 0,
           marketCapEur: parseFloat(row[5]) || 0,
           volumeEur: parseFloat(row[6]) || 0,
+          directors: []
         };
+        
+        // Try to match directors by company name variations
+        const companyNameVariations = [
+          company.company,
+          company.company.replace(/\s+(S\.A\.|SA|S\.L\.|SL)$/i, ''),
+          company.company.split(' ')[0] // First word only
+        ];
+        
+        for (const variation of companyNameVariations) {
+          const matchedDirectors = directorsByCompany[variation];
+          if (matchedDirectors) {
+            company.directors = matchedDirectors;
+            console.log(`📋 Matched ${matchedDirectors.length} directors for ${company.company} (via "${variation}")`);
+            break;
+          }
+        }
+        
+        return company;
       } catch (error) {
-        console.warn(`⚠️ Error parsing row ${index + 2}:`, row, error.message);
+        console.warn(`⚠️ Error parsing company row ${index + 2}:`, row, error.message);
         return null;
       }
     })
@@ -249,7 +301,8 @@ function transformSheetsData(sheetsData) {
       company.currentPriceEur > 0
     );
     
-  console.log(`✅ Successfully transformed ${companies.length} valid companies`);
+  const totalDirectors = companies.reduce((sum, company) => sum + company.directors.length, 0);
+  console.log(`✅ Successfully transformed ${companies.length} companies with ${totalDirectors} total directors`);
   return companies;
 }
 

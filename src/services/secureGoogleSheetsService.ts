@@ -1,6 +1,13 @@
 // Secure service that calls Cloudflare Workers backend
 // No credentials exposed in frontend
 
+export interface Director {
+  name: string;
+  position: string;
+  appointmentDate: string;
+  bioUrl: string;
+}
+
 export interface SecureIBEXCompanyData {
   ticker: string;
   company: string;
@@ -9,6 +16,7 @@ export interface SecureIBEXCompanyData {
   currentPriceEur: number;
   marketCapEur: number;
   volumeEur: number;
+  directors: Director[];
 }
 
 export interface SecureAPIResponse {
@@ -97,7 +105,11 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'SAN',
         currentPriceEur: 4.234,
         marketCapEur: 65240000000,
-        volumeEur: 45230000
+        volumeEur: 45230000,
+        directors: [
+          { name: 'Ana Botín', position: 'Presidente', appointmentDate: '2014-09-10', bioUrl: '' },
+          { name: 'José Antonio Álvarez', position: 'Consejero Delegado', appointmentDate: '2015-01-01', bioUrl: '' }
+        ]
       },
       {
         ticker: 'IBE.MC',
@@ -106,7 +118,8 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'IBE',
         currentPriceEur: 12.845,
         marketCapEur: 81340000000,
-        volumeEur: 28450000
+        volumeEur: 28450000,
+        directors: [{ name: 'Ignacio Galán', position: 'Presidente', appointmentDate: '2006-04-28', bioUrl: '' }]
       },
       {
         ticker: 'ITX.MC',
@@ -115,7 +128,8 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'ITX',
         currentPriceEur: 51.26,
         marketCapEur: 159870000000,
-        volumeEur: 15680000
+        volumeEur: 15680000,
+        directors: [{ name: 'Marta Ortega', position: 'Presidenta', appointmentDate: '2022-04-01', bioUrl: '' }]
       },
       {
         ticker: 'BBVA.MC',
@@ -124,7 +138,8 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'BBVA',
         currentPriceEur: 9.876,
         marketCapEur: 63450000000,
-        volumeEur: 32100000
+        volumeEur: 32100000,
+        directors: [{ name: 'Carlos Torres', position: 'Presidente', appointmentDate: '2018-12-21', bioUrl: '' }]
       },
       {
         ticker: 'TEF.MC',
@@ -133,7 +148,8 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'TEF',
         currentPriceEur: 3.987,
         marketCapEur: 23890000000,
-        volumeEur: 18790000
+        volumeEur: 18790000,
+        directors: []
       },
       {
         ticker: 'REP.MC',
@@ -142,7 +158,8 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'REP',
         currentPriceEur: 15.43,
         marketCapEur: 23450000000,
-        volumeEur: 12340000
+        volumeEur: 12340000,
+        directors: []
       },
       {
         ticker: 'CABK.MC',
@@ -151,7 +168,8 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'CABK',
         currentPriceEur: 4.567,
         marketCapEur: 31200000000,
-        volumeEur: 21560000
+        volumeEur: 21560000,
+        directors: []
       },
       {
         ticker: 'ACS.MC',
@@ -160,7 +178,8 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'ACS',
         currentPriceEur: 42.18,
         marketCapEur: 13250000000,
-        volumeEur: 2340000
+        volumeEur: 2340000,
+        directors: []
       },
       {
         ticker: 'FER.MC',
@@ -169,7 +188,8 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'FER',
         currentPriceEur: 28.95,
         marketCapEur: 21340000000,
-        volumeEur: 3450000
+        volumeEur: 3450000,
+        directors: []
       },
       {
         ticker: 'AENA.MC',
@@ -178,7 +198,8 @@ export class SecureGoogleSheetsService {
         formattedTicker: 'AENA',
         currentPriceEur: 184.6,
         marketCapEur: 27690000000,
-        volumeEur: 1230000
+        volumeEur: 1230000,
+        directors: []
       }
     ];
   }
