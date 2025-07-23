@@ -59,6 +59,8 @@ export function ModernDashboard() {
     }
   });
 
+
+
   const totalMarketCap = companies.reduce((sum, company) => sum + company.marketCapEur, 0);
   const avgPrice = companies.reduce((sum, company) => sum + company.currentPriceEur, 0) / companies.length;
   const totalVolume = companies.reduce((sum, company) => sum + company.volumeEur, 0);
