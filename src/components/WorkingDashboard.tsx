@@ -29,8 +29,8 @@ export function WorkingDashboard() {
   }, []);
 
   const filteredCompanies = companies.filter(company =>
-    company.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    company.ticker.toLowerCase().includes(searchQuery.toLowerCase())
+    (company.company || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (company.ticker || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Chart data

@@ -63,7 +63,7 @@ const CompanyRow = React.memo(({ company, isSelected, onToggle }: {
       <div className="flex-1">
         <div className="flex items-center justify-between">
           <div>
-            <span className="font-medium">{company.formattedTicker}</span>
+            <span className="font-medium">{company.formattedTicker || company.ticker}</span>
             <span className="ml-2 text-sm text-gray-600">{company.company}</span>
           </div>
           <div className="text-right">
@@ -114,7 +114,7 @@ const NetworkVisualization = ({ companies, selectedCompanyIds }: {
       id: company.ticker,
       x: width / 2 + Math.cos(i * 2 * Math.PI / relevantCompanies.length) * 150,
       y: height / 2 + Math.sin(i * 2 * Math.PI / relevantCompanies.length) * 150,
-      label: company.formattedTicker,
+      label: company.formattedTicker || company.ticker,
       type: 'company' as const,
       directorCount: company.directors.length
     }));
@@ -228,9 +228,9 @@ export function EnhancedDashboard() {
   
   const filteredCompanies = useMemo(() => {
     return companies.filter(company =>
-      company.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      company.ticker.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      company.formattedTicker.toLowerCase().includes(searchQuery.toLowerCase())
+      (company.company || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (company.ticker || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (company.formattedTicker || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [companies, searchQuery]);
   
@@ -464,7 +464,7 @@ export function EnhancedDashboard() {
                       const mockChange = SecureGoogleSheetsService.calculateMockChange();
                       return (
                         <div key={company.ticker} className="flex items-center gap-4">
-                          <span className="w-20 text-sm font-medium">{company.formattedTicker}</span>
+                          <span className="w-20 text-sm font-medium">{company.formattedTicker || company.ticker}</span>
                           <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
                             <div
                               className={`h-full ${mockChange.changePercent >= 0 ? 'bg-green-500' : 'bg-red-500'}`}

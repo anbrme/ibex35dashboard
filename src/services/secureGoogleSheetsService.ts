@@ -12,7 +12,7 @@ export interface SecureIBEXCompanyData {
   ticker: string;
   company: string;
   sector: string;
-  formattedTicker: string;
+  formattedTicker?: string;
   currentPriceEur: number;
   marketCapEur: number;
   volumeEur: number;

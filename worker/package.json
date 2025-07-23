@@ -8,10 +8,15 @@
     "dev": "wrangler dev",
     "tail": "wrangler tail"
   },
-  "keywords": ["cloudflare", "worker", "google-sheets", "ibex35"],
+  "keywords": [
+    "cloudflare",
+    "worker",
+    "google-sheets",
+    "ibex35"
+  ],
   "author": "Alessandro Nurnberg",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^4.25.1"
   }
 }
