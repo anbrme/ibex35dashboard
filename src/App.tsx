@@ -1,7 +1,7 @@
-import { ModernDashboard } from './components/modern/ModernDashboard';
+import { WorkingDashboard } from './components/WorkingDashboard';
 
 function App() {
-  return <ModernDashboard />;
+  return <WorkingDashboard />;
 }
 
 export default App;
