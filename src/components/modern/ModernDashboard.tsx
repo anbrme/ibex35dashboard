@@ -142,7 +142,7 @@ export function ModernDashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
         >
           <div className="market-card text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
@@ -180,7 +180,7 @@ export function ModernDashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="glass-card p-6 mb-8"
+          className="glass-card p-4 mb-6"
         >
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Search */}
@@ -237,7 +237,7 @@ export function ModernDashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ delay: 0.6 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4"
             >
               {sortedCompanies.map((company, index) => (
                 <ModernCompanyCard

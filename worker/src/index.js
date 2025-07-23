@@ -2,14 +2,14 @@
 // More reliable than Pages Functions
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     // CORS preflight handling
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, Cache-Control, Accept',
           'Access-Control-Max-Age': '86400',
         }
       });
@@ -65,7 +65,7 @@ export default {
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'public, max-age=300, s-maxage=300', // 5-minute cache
+          'Cache-Control': 'public, max-age=300, s-max-age=300', // 5-minute cache
         }
       });
 
