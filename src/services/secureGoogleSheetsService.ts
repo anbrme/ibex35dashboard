@@ -27,7 +27,7 @@ export class SecureGoogleSheetsService {
     try {
       console.log('🔒 Fetching data from secure backend...');
       
-      const response = await fetch(`${this.API_BASE_URL}/api/sheets`, {
+      const response = await fetch(`${this.API_BASE_URL}/api/sheets-secure`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -63,7 +63,7 @@ export class SecureGoogleSheetsService {
   // Test connection to backend
   static async testConnection(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.API_BASE_URL}/api/sheets`, {
+      const response = await fetch(`${this.API_BASE_URL}/api/sheets-secure`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
