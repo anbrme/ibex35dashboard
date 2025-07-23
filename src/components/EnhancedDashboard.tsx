@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Search, Building2, Users, TrendingUp, Network, Filter, ChevronRight, X, LineChart, PieChart, BarChart3, RefreshCw } from 'lucide-react';
-import { SecureGoogleSheetsService, SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
+import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw } from 'lucide-react';
+import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
 
 // Virtual list component for performance
 const VirtualList = ({ items, height, itemHeight, renderItem, selectedIds, onToggleSelect }: {
