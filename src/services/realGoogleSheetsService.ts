@@ -13,7 +13,7 @@ export class RealGoogleSheetsService {
   
   // Configuration - user will need to set these
   private static config = {
-    spreadsheetId: '', // User will provide this
+    spreadsheetId: '11rpmdk6jWqwueio-aTJYoFBiNCmlnLhZ7jHPbvPrEJ0', // User will provide this
     sheetName: 'Sheet1', // Default sheet name
     range: 'A2:G', // Assuming data starts from row 2, columns A-G
     makePublic: true // Sheet needs to be public for this method
