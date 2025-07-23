@@ -1,17 +1,7 @@
-import { Routes, Route } from 'react-router-dom';
-import { MainLayout } from './components/layout/MainLayout';
-import { DashboardPage } from './pages/DashboardPage';
-import { CompanyPage } from './pages/CompanyPage';
+import { ModernDashboard } from './components/modern/ModernDashboard';
 
 function App() {
-  return (
-    <Routes>
-      <Route element={<MainLayout />}>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/company/:ticker" element={<CompanyPage />} />
-      </Route>
-    </Routes>
-  );
+  return <ModernDashboard />;
 }
 
 export default App;
