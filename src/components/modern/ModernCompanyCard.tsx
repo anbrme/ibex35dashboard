@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Minus, Building2, Users, Globe } from 'lucide-react';
-import type { RealIBEXCompanyData } from '../../services/realGoogleSheetsService';
+import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 
 interface ModernCompanyCardProps {
-  company: RealIBEXCompanyData;
+  company: SecureIBEXCompanyData;
   onClick?: () => void;
   index?: number;
 }

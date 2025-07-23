@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Sparkles, TrendingUp, BarChart3, PieChart, RefreshCw } from 'lucide-react';
 import { ModernCompanyCard } from './ModernCompanyCard';
-import type { RealIBEXCompanyData } from '../../services/realGoogleSheetsService';
-// import { RealGoogleSheetsService } from '../../services/realGoogleSheetsService';
+import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
+import { SecureGoogleSheetsService } from '../../services/secureGoogleSheetsService';
 
 export function ModernDashboard() {
-  const [companies, setCompanies] = useState<RealIBEXCompanyData[]>([]);
+  const [companies, setCompanies] = useState<SecureIBEXCompanyData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSector, setSelectedSector] = useState<string>('all');
@@ -20,30 +20,8 @@ export function ModernDashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // TODO: User needs to configure their Google Sheet ID
-      // RealGoogleSheetsService.setConfig('YOUR_GOOGLE_SHEET_ID_HERE');
-      
-      // For now, show instructions to user
-      console.log('📝 To use real data, please:');
-      console.log('1. Make your Google Sheet public');
-      console.log('2. Call: RealGoogleSheetsService.setConfig("YOUR_SHEET_ID")');
-      console.log('3. Your sheet should have columns: Ticker | Company | Sector | Formatted_Ticker | Current_Price_EUR | MarketCap_EUR | Volume_EUR');
-      
-      // Fallback to mock data for now
-      const mockData: RealIBEXCompanyData[] = [
-        {
-          ticker: 'SAN.MC',
-          company: 'Banco Santander',
-          sector: 'Financials',
-          formattedTicker: 'SAN',
-          currentPriceEur: 4.234,
-          marketCapEur: 65240000000,
-          volumeEur: 45230000
-        },
-        // Add more mock data as needed...
-      ];
-      
-      setCompanies(mockData);
+      const data = await SecureGoogleSheetsService.fetchRealIBEXData();
+      setCompanies(data);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
