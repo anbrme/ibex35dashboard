@@ -1,0 +1,10 @@
+name = "ibex35-sheets-api"
+main = "src/index.js"
+compatibility_date = "2024-07-15"
+
+[vars]
+GOOGLE_SHEET_ID = "11rpmdk6jWqwueio-aTJYoFBiNCmlnLhZ7jHPbvPrEJ0"
+
+# Environment secrets (set via wrangler secret put)
+# GOOGLE_SERVICE_ACCOUNT_EMAIL
+# GOOGLE_PRIVATE_KEY

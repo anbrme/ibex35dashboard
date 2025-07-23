@@ -21,15 +21,15 @@ export interface SecureAPIResponse {
 }
 
 export class SecureGoogleSheetsService {
-  // Use Cloudflare Pages Functions (built-in)
-  private static readonly API_BASE_URL = window.location.origin;
+  // Use dedicated Cloudflare Worker
+  private static readonly API_BASE_URL = 'https://ibex35-sheets-api.anurnberg.workers.dev';
   
   static async fetchRealIBEXData(): Promise<SecureIBEXCompanyData[]> {
     try {
       console.log('🔒 Fetching data from secure backend...');
       console.log('📡 API URL:', this.API_BASE_URL);
       
-      const response = await fetch(`${this.API_BASE_URL}/api/sheets-secure`, {
+      const response = await fetch(this.API_BASE_URL, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -67,7 +67,7 @@ export class SecureGoogleSheetsService {
   // Test connection to backend
   static async testConnection(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.API_BASE_URL}/api/sheets-secure`, {
+      const response = await fetch(this.API_BASE_URL, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });

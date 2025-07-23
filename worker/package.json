@@ -1,0 +1,17 @@
+{
+  "name": "ibex35-sheets-api-worker",
+  "version": "1.0.0",
+  "description": "Dedicated Cloudflare Worker for IBEX 35 Google Sheets API",
+  "main": "src/index.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "keywords": ["cloudflare", "worker", "google-sheets", "ibex35"],
+  "author": "Alessandro Nurnberg",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
