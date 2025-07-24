@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import styled, { createGlobalStyle, keyframes } from 'styled-components';
 import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
-import { InteractiveNetworkGraph } from './enhanced/InteractiveNetworkGraph';
+import { CytoscapeNetworkGraph } from './enhanced/CytoscapeNetworkGraph';
+import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
 
 // Global styles
 const GlobalStyle = createGlobalStyle`
@@ -947,7 +948,7 @@ export function StyledDashboard() {
               </VisualizationTitle>
               
               {activeView === 'network' && (
-                <InteractiveNetworkGraph
+                <CytoscapeNetworkGraph
                   companies={companies}
                   selectedCompanyIds={selectedCompanyIds}
                   width={800}
@@ -1018,38 +1019,7 @@ export function StyledDashboard() {
                 </div>
               )}
               
-              {activeView === 'directors' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {companies
-                    .filter(c => (selectedCompanyIds.size === 0 || selectedCompanyIds.has(c.ticker)) && c.directors.length > 0)
-                    .slice(0, 5)
-                    .map(company => (
-                      <MetricCard key={company.ticker} color="#3b82f6">
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{company.company}</h3>
-                            <Badge style={{ background: '#3b82f6', color: 'white', border: 'none' }}>
-                              {company.directors.length} directors
-                            </Badge>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {company.directors.slice(0, 3).map((director, idx) => (
-                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                                <span>{director.name}</span>
-                                <span style={{ color: '#6b7280' }}>{director.position}</span>
-                              </div>
-                            ))}
-                            {company.directors.length > 3 && (
-                              <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
-                                +{company.directors.length - 3} more
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </MetricCard>
-                    ))}
-                </div>
-              )}
+              {activeView === 'directors' && <DirectorsAnalysisPanel companies={companies} selectedCompanyIds={selectedCompanyIds} />}
             </VisualizationCard>
           </VisualizationArea>
         </RightPanel>

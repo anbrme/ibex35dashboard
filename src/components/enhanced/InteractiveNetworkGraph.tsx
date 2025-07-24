@@ -161,17 +161,32 @@ export function InteractiveNetworkGraph({ companies, selectedCompanyIds, width =
     // Create company nodes in a circle
     const centerX = width / 2;
     const centerY = height / 2;
-    const companyRadius = Math.min(width, height) / 4;
+    
+    // Dynamic radius calculation based on number of companies
+    const baseRadius = Math.min(width, height) / 6;
+    const companyRadius = relevantCompanies.length === 1 ? 0 : baseRadius + (relevantCompanies.length - 1) * 20;
 
     relevantCompanies.forEach((company, i) => {
-      const angle = (i * 2 * Math.PI) / relevantCompanies.length;
+      let companyX, companyY;
+      
+      if (relevantCompanies.length === 1) {
+        // Single company: center it
+        companyX = centerX;
+        companyY = centerY;
+      } else {
+        // Multiple companies: arrange in circle
+        const angle = (i * 2 * Math.PI) / relevantCompanies.length;
+        companyX = centerX + Math.cos(angle) * companyRadius;
+        companyY = centerY + Math.sin(angle) * companyRadius;
+      }
+      
       const companyNode: Node = {
         id: company.ticker,
-        x: centerX + Math.cos(angle) * companyRadius,
-        y: centerY + Math.sin(angle) * companyRadius,
+        x: companyX,
+        y: companyY,
         label: company.formattedTicker || company.ticker,
         type: 'company',
-        radius: 35,
+        radius: 40,
         color: selectedCompanyIds.has(company.ticker) ? '#3b82f6' : '#6366f1',
         company: company,
         vx: 0,
@@ -180,18 +195,35 @@ export function InteractiveNetworkGraph({ companies, selectedCompanyIds, width =
       newNodes.push(companyNode);
 
       // Create director nodes around each company
+      const directorCount = company.directors.length;
+      const directorRadius = relevantCompanies.length === 1 ? 120 : 100;
+      
       company.directors.forEach((director, dirIndex) => {
         const directorId = `dir_${company.ticker}_${dirIndex}`;
-        const directorAngle = angle + (dirIndex - company.directors.length / 2) * 0.8;
-        const directorDistance = companyRadius + 80;
+        
+        let directorX, directorY;
+        
+        if (relevantCompanies.length === 1) {
+          // Single company: arrange directors in full circle around company
+          const directorAngle = (dirIndex * 2 * Math.PI) / directorCount;
+          directorX = companyX + Math.cos(directorAngle) * directorRadius;
+          directorY = companyY + Math.sin(directorAngle) * directorRadius;
+        } else {
+          // Multiple companies: arrange directors in arc around each company
+          const baseAngle = (i * 2 * Math.PI) / relevantCompanies.length;
+          const arcSpread = Math.PI / 3; // 60 degree arc
+          const directorAngle = baseAngle + (dirIndex - (directorCount - 1) / 2) * (arcSpread / Math.max(1, directorCount - 1));
+          directorX = companyX + Math.cos(directorAngle) * directorRadius;
+          directorY = companyY + Math.sin(directorAngle) * directorRadius;
+        }
         
         const directorNode: Node = {
           id: directorId,
-          x: centerX + Math.cos(directorAngle) * directorDistance,
-          y: centerY + Math.sin(directorAngle) * directorDistance,
+          x: directorX,
+          y: directorY,
           label: director.name.split(' ').slice(0, 2).join(' '),
           type: 'director',
-          radius: 20,
+          radius: 22,
           color: '#8b5cf6',
           director: director,
           company: company,
@@ -275,12 +307,23 @@ export function InteractiveNetworkGraph({ companies, selectedCompanyIds, width =
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // Set canvas size
-    canvas.width = width;
-    canvas.height = height;
+    // High DPI support for crisp rendering
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    
+    // Set the actual size in memory (scaled up)
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    
+    // Scale the canvas back down using CSS
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    
+    // Scale the drawing context so everything draws at the correct size
+    ctx.scale(dpr, dpr);
     
     // Clear canvas
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, rect.width, rect.height);
     
     // Draw edges
     ctx.strokeStyle = 'rgba(100, 116, 139, 0.3)';
