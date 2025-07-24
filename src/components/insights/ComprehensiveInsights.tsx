@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import styled from 'styled-components';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ComposedChart, Area, AreaChart } from 'recharts';
-import { TrendingUp, DollarSign, BarChart3, Users, Briefcase, MessageSquare, Target, Activity, PieChart, ArrowUp, ArrowDown } from 'lucide-react';
-import { SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
+import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ComposedChart } from 'recharts';
+import { TrendingUp, DollarSign, BarChart3, Users, Briefcase, MessageSquare, Target, Activity, ArrowUp } from 'lucide-react';
+import type { SecureIBEXCompanyData } from './../../services/secureGoogleSheetsService';
 
 interface ComprehensiveInsightsProps {
   companies: SecureIBEXCompanyData[];
@@ -435,7 +435,7 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
             Top Performers by EPS
           </ChartTitle>
           <ResponsiveContainer width="100%" height={350}>
-            <BarChart 
+            <ComposedChart 
               data={filteredCompanies
                 .filter(c => c.eps !== null)
                 .sort((a, b) => (b.eps || 0) - (a.eps || 0))
