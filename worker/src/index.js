@@ -32,6 +32,8 @@ export default {
       return handleNetworkData(db, request);
     } else if (path === '/api/status') {
       return handleSyncStatus(db);
+    } else if (path === '/api/debug') {
+      return handleDebug(env);
     }
 
     // Default: return companies (backward compatibility)
@@ -206,6 +208,58 @@ async function handleNetworkData(db, request) {
   }
 }
 
+// Handle /api/debug endpoint - test Google Sheets access
+async function handleDebug(env) {
+  try {
+    console.log('🐛 Debug: Testing Google Sheets access...');
+    
+    // Check environment variables
+    const SERVICE_ACCOUNT_EMAIL = env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const PRIVATE_KEY = env.GOOGLE_PRIVATE_KEY;
+    const SHEET_ID = env.GOOGLE_SHEET_ID;
+    
+    const envCheck = {
+      hasServiceAccountEmail: !!SERVICE_ACCOUNT_EMAIL,
+      hasPrivateKey: !!PRIVATE_KEY,
+      hasSheetId: !!SHEET_ID,
+      sheetId: SHEET_ID
+    };
+    
+    console.log('🔍 Environment check:', envCheck);
+    
+    if (!SERVICE_ACCOUNT_EMAIL || !PRIVATE_KEY || !SHEET_ID) {
+      return createErrorResponse('Missing environment variables', 500, envCheck);
+    }
+    
+    // Try to create JWT and get access token
+    const jwt = await createServiceAccountJWT(SERVICE_ACCOUNT_EMAIL, PRIVATE_KEY);
+    const accessToken = await getAccessToken(jwt);
+    
+    // Try to fetch a larger range to see the actual structure
+    console.log('📊 Testing larger range fetch...');
+    const testData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A1:L3');
+    
+    return new Response(JSON.stringify({
+      success: true,
+      debug: {
+        environment: envCheck,
+        testData: testData.values || [],
+        message: 'Google Sheets access working'
+      },
+      timestamp: new Date().toISOString()
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+    
+  } catch (error) {
+    console.error('🐛 Debug error:', error);
+    return createErrorResponse(`Debug failed: ${error.message}`, 500);
+  }
+}
+
 // Handle /api/status endpoint
 async function handleSyncStatus(db) {
   try {
@@ -258,17 +312,9 @@ async function fetchFromGoogleSheets(env) {
     
     // Fetch data from both sheets
     console.log('📋 Fetching companies from Sheet1...');
-    // Try to fetch the extended range first, fall back to original range if needed
-    let companiesData;
-    try {
-      console.log('🔍 Attempting to fetch extended range A2:L...');
-      companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:L');
-      console.log('✅ Successfully fetched extended range');
-    } catch (error) {
-      console.warn('⚠️ Extended range failed, trying original range A2:G:', error.message);
-      companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:G');
-      console.log('✅ Successfully fetched original range');
-    }
+    // Fetch the full range with financial data
+    console.log('🔍 Fetching full range A2:L...');
+    const companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:L');
     
     console.log('👥 Fetching directors from Directors sheet...');
     let directorsData;
@@ -460,9 +506,13 @@ async function fetchGoogleSheetsData(sheetId, accessToken, range = 'Sheet1!A2:L'
 function parseFinancialValue(value) {
   if (!value) return null;
   
-  // Handle Google Finance #N/A values
+  // Handle Google Finance #N/A values and errors
   const stringValue = String(value).trim();
-  if (stringValue === '#N/A' || stringValue === '#ERROR!' || stringValue === '' || stringValue === 'N/A') {
+  if (stringValue.includes('#N/A') || 
+      stringValue.includes('#ERROR!') || 
+      stringValue === '' || 
+      stringValue === 'N/A' ||
+      stringValue.includes('not available')) {
     return null;
   }
   
@@ -509,19 +559,19 @@ function transformSheetsData(companiesData, directorsData) {
     .map((row, index) => {
       try {
         const company = {
-          company: row[0] || '',
-          sector: row[1] || '',
-          formattedTicker: row[2] || '',
-          currentPriceEur: parseFloat(row[3]) || 0,
-          marketCapEur: parseFloat(row[4]) || 0,
-          volumeEur: parseFloat(row[5]) || 0,
-          peRatio: parseFinancialValue(row[6]),
-          eps: parseFinancialValue(row[7]),
-          high52: parseFinancialValue(row[8]),
-          low52: parseFinancialValue(row[9]),
-          priceChange: parseFinancialValue(row[10]),
-          changePercent: parseFinancialValue(row[11]),
-          ticker: row[2] || '', // Use formatted ticker as the primary ticker
+          ticker: row[0] || '', // Column A: Ticker (e.g., ACS.MC)
+          company: row[1] || '', // Column B: Company (e.g., ACS)
+          sector: row[2] || '', // Column C: Sector (e.g., Construction)
+          formattedTicker: row[3] || '', // Column D: Formatted_Ticker (e.g., BME:ACS)
+          currentPriceEur: parseFloat(row[4]) || 0, // Column E: Current_Price_EUR
+          marketCapEur: parseFloat(row[5]) || 0, // Column F: MarketCap_EUR
+          volumeEur: parseFloat(row[6]) || 0, // Column G: Volume_EUR
+          peRatio: parseFinancialValue(row[7]), // Column H: P/E
+          eps: parseFinancialValue(row[8]), // Column I: EPS
+          high52: parseFinancialValue(row[9]), // Column J: High52
+          low52: parseFinancialValue(row[10]), // Column K: Low52
+          priceChange: parseFinancialValue(row[11]), // Column L: Price_Change
+          changePercent: null, // You don't have Price_Change_% column yet
           directors: []
         };
         
