@@ -269,16 +269,17 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
           count: company.peRatio || 0,
           ticker: company.ticker,
           fullName: company.company,
-          color: getCompanyColor(company.ticker, selectedCompanyIds)
+          color: getCompanyColor(company.ticker, selectedCompanyIds),
+          isCompany: true as const
         }));
     } else {
       // Show grouped ranges for single/no selection
       const ranges = [
-        { range: '0-10', min: 0, max: 10, count: 0 },
-        { range: '10-15', min: 10, max: 15, count: 0 },
-        { range: '15-20', min: 15, max: 20, count: 0 },
-        { range: '20-25', min: 20, max: 25, count: 0 },
-        { range: '25+', min: 25, max: Infinity, count: 0 }
+        { range: '0-10', min: 0, max: 10, count: 0, isCompany: false as const },
+        { range: '10-15', min: 10, max: 15, count: 0, isCompany: false as const },
+        { range: '15-20', min: 15, max: 20, count: 0, isCompany: false as const },
+        { range: '20-25', min: 20, max: 25, count: 0, isCompany: false as const },
+        { range: '25+', min: 25, max: Infinity, count: 0, isCompany: false as const }
       ];
 
       filteredCompanies.forEach(company => {
@@ -446,13 +447,13 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
                         boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
                       }}>
                         <p style={{ margin: 0, fontWeight: 600, color: '#1f2937' }}>
-                          {selectedCompanyIds.size > 1 ? (data.fullName || label) : label}
+                          {data.isCompany ? (data.fullName || label) : label}
                         </p>
-                        {selectedCompanyIds.size > 1 && data.ticker && (
+                        {data.isCompany && data.ticker && (
                           <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6b7280' }}>({data.ticker})</p>
                         )}
                         <p style={{ margin: '4px 0 0 0', color: '#374151' }}>
-                          {selectedCompanyIds.size > 1 ? `P/E Ratio: ${payload[0].value}` : `Companies: ${payload[0].value}`}
+                          {data.isCompany ? `P/E Ratio: ${payload[0].value}` : `Companies: ${payload[0].value}`}
                         </p>
                       </div>
                     );
@@ -463,7 +464,7 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
               {selectedCompanyIds.size > 1 ? (
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                   {peDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color || COLORS.primary} />
+                    <Cell key={`cell-${index}`} fill={entry.isCompany ? entry.color : COLORS.primary} />
                   ))}
                 </Bar>
               ) : (
