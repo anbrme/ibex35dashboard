@@ -297,24 +297,22 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       layout: {
         name: 'cose',
         animate: true,
-        animationDuration: 1000,
+        animationDuration: 800,
         animationEasing: 'ease-out',
-        nodeRepulsion: function( _node: any ){ return 8000; },
+        nodeRepulsion: 8000,
         nodeOverlap: 20,
-        idealEdgeLength: function( _edge: any ){ return 100; },
-        edgeElasticity: function( _edge: any ){ return 400; },
+        idealEdgeLength: 100,
+        edgeElasticity: 400,
         nestingFactor: 1.2,
         gravity: 0.1,
-        numIter: 1000,
+        numIter: 500,
         initialTemp: 200,
         coolingFactor: 0.95,
         minTemp: 1.0,
         randomize: false,
         componentSpacing: 100,
-        boundingBox: undefined,
-        transform: function (_node: any, position: any) { return position; },
-        ready: undefined,
-        stop: undefined
+        fit: true,
+        padding: 30
       },
       zoom: 1,
       pan: { x: 0, y: 0 },
@@ -336,6 +334,18 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
 
     // Store reference
     cyRef.current = cy;
+
+    // Small delay to ensure proper initialization
+    setTimeout(() => {
+      if (cy && cy.elements && cy.elements().length > 0) {
+        try {
+          cy.fit();
+          cy.center();
+        } catch (error) {
+          console.warn('Cytoscape layout adjustment failed:', error);
+        }
+      }
+    }, 100);
 
     // Event handlers
     cy.on('mouseover', 'node', (event) => {

@@ -88,7 +88,9 @@ const Controls = styled.div`
   margin-bottom: 16px;
 `;
 
-const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
+const Button = styled.button.withConfig({
+  shouldForwardProp: (prop) => prop !== 'variant'
+})<{ variant?: 'primary' | 'secondary' }>`
   display: flex;
   align-items: center;
   gap: 8px;
@@ -191,7 +193,9 @@ const CompanyList = styled.div`
   padding: 16px;
 `;
 
-const CompanyCard = styled.div<{ isSelected: boolean }>`
+const CompanyCard = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isSelected'
+})<{ isSelected: boolean }>`
   background: ${props => props.isSelected ? 
     'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(29, 78, 216, 0.1))' : 
     'rgba(255, 255, 255, 0.8)'};
@@ -247,7 +251,9 @@ const CompanySector = styled.p`
   margin: 0;
 `;
 
-const SelectionIndicator = styled.div<{ isSelected: boolean }>`
+const SelectionIndicator = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isSelected'
+})<{ isSelected: boolean }>`
   width: 20px;
   height: 20px;
   border: 2px solid ${props => props.isSelected ? '#3b82f6' : '#d1d5db'};
@@ -305,7 +311,9 @@ const PriceLabel = styled.div`
   margin-top: 4px;
 `;
 
-const ChangeBadge = styled.div<{ isPositive: boolean }>`
+const ChangeBadge = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isPositive'
+})<{ isPositive: boolean }>`
   display: flex;
   align-items: center;
   gap: 4px;
@@ -425,7 +433,9 @@ const ViewTabs = styled.div`
   gap: 12px;
 `;
 
-const ViewTab = styled.button<{ isActive: boolean }>`
+const ViewTab = styled.button.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isActive'
+})<{ isActive: boolean }>`
   display: flex;
   align-items: center;
   gap: 12px;
