@@ -60,7 +60,9 @@ const ControlButton = styled.button`
   }
 `;
 
-const Tooltip = styled.div<{ x: number; y: number; visible: boolean }>`
+const Tooltip = styled.div.withConfig({
+  shouldForwardProp: (prop) => !['x', 'y', 'visible'].includes(prop as string)
+})<{ x: number; y: number; visible: boolean }>`
   position: absolute;
   left: ${props => props.x}px;
   top: ${props => props.y}px;
@@ -139,12 +141,12 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
   });
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !companies || companies.length === 0) return;
 
-    // Filter relevant companies
+    // Filter relevant companies with null safety
     const relevantCompanies = selectedCompanyIds.size > 0 
-      ? companies.filter(c => selectedCompanyIds.has(c.ticker))
-      : companies.slice(0, 8); // Show top 8 if none selected
+      ? companies.filter(c => c && c.ticker && selectedCompanyIds.has(c.ticker))
+      : companies.filter(c => c && c.ticker).slice(0, 8); // Show top 8 if none selected
 
     if (relevantCompanies.length === 0) return;
 
@@ -195,8 +197,10 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       }
     });
 
-    // Initialize Cytoscape
-    const cy = cytoscape({
+    // Initialize Cytoscape with error handling
+    let cy;
+    try {
+      cy = cytoscape({
       container: containerRef.current,
       elements,
       style: [
@@ -282,9 +286,10 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
           }
         },
         {
-          selector: 'node:hover',
+          selector: 'node.highlighted',
           style: {
-            'border-width': 3,
+            'border-width': 4,
+            'border-color': '#10b981',
             'z-index': 998
           }
         }
@@ -322,6 +327,12 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       autoungrabify: false,
       autounselectify: false
     });
+    } catch (error) {
+      console.error('Cytoscape initialization error:', error);
+      return;
+    }
+
+    if (!cy) return;
 
     // Store reference
     cyRef.current = cy;
@@ -331,6 +342,14 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       const node = event.target;
       const data = node.data();
       const position = node.renderedPosition();
+      
+      // Add hover effect
+      if (!node.hasClass('highlighted')) {
+        node.style({
+          'border-width': 3,
+          'z-index': 998
+        });
+      }
       
       let tooltipText = '';
       if (data.type === 'company') {
@@ -352,7 +371,24 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       });
     });
 
-    cy.on('mouseout', 'node', () => {
+    cy.on('mouseout', 'node', (event) => {
+      const node = event.target;
+      
+      // Remove hover effect unless highlighted
+      if (!node.hasClass('highlighted')) {
+        if (node.data('type') === 'company') {
+          node.style({
+            'border-width': 3,
+            'z-index': 10
+          });
+        } else {
+          node.style({
+            'border-width': 2,
+            'z-index': 5
+          });
+        }
+      }
+      
       setTooltip(prev => ({ ...prev, visible: false }));
     });
 
@@ -377,7 +413,13 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
 
     // Cleanup
     return () => {
-      cy.destroy();
+      try {
+        if (cy && cy.destroy) {
+          cy.destroy();
+        }
+      } catch (error) {
+        console.error('Cytoscape cleanup error:', error);
+      }
     };
   }, [companies, selectedCompanyIds]);
 
