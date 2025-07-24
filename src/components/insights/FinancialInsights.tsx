@@ -274,6 +274,66 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
       }));
   }, [filteredCompanies, selectedCompanyIds.size]);
 
+  // P/E vs EPS Relationship
+  const valuationData = useMemo(() => {
+    return filteredCompanies
+      .filter(c => c.eps && c.peRatio)
+      .map((company, index) => ({
+        x: company.eps || 0,
+        y: company.peRatio || 0,
+        name: company.company,
+        ticker: company.ticker,
+        sector: company.sector,
+        marketCap: company.marketCapEur || 0,
+        changePercent: company.changePercent || 0,
+        color: selectedCompanyIds.size > 1 
+          ? COMPANY_COLORS[index % COMPANY_COLORS.length]
+          : SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
+      }));
+  }, [filteredCompanies, selectedCompanyIds.size]);
+
+  // 52-Week Performance Position
+  const performanceRangeData = useMemo(() => {
+    return filteredCompanies
+      .filter(c => c.high52 && c.low52 && c.currentPriceEur)
+      .map((company, index) => {
+        const range = (company.high52! - company.low52!);
+        const position = range > 0 ? ((company.currentPriceEur - company.low52!) / range) * 100 : 50;
+        return {
+          name: company.company.length > 15 ? company.company.substring(0, 15) + '...' : company.company,
+          fullName: company.company,
+          ticker: company.ticker,
+          position,
+          low: company.low52,
+          high: company.high52,
+          current: company.currentPriceEur,
+          changePercent: company.changePercent || 0,
+          color: selectedCompanyIds.size > 1 
+            ? COMPANY_COLORS[index % COMPANY_COLORS.length]
+            : (position > 70 ? '#10b981' : position < 30 ? '#ef4444' : '#f59e0b')
+        };
+      })
+      .sort((a, b) => b.position - a.position);
+  }, [filteredCompanies, selectedCompanyIds.size]);
+
+  // Market Performance Quadrants (P/E vs Change%)
+  const quadrantData = useMemo(() => {
+    return filteredCompanies
+      .filter(c => c.peRatio && c.changePercent !== null)
+      .map((company, index) => ({
+        x: company.changePercent || 0,
+        y: company.peRatio || 0,
+        name: company.company,
+        ticker: company.ticker,
+        sector: company.sector,
+        marketCap: company.marketCapEur || 0,
+        eps: company.eps || 0,
+        color: selectedCompanyIds.size > 1 
+          ? COMPANY_COLORS[index % COMPANY_COLORS.length]
+          : SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
+      }));
+  }, [filteredCompanies, selectedCompanyIds.size]);
+
   const aggregateMetrics = useMemo(() => {
     const validCompanies = filteredCompanies.filter(c => c.marketCapEur);
     const totalMarketCap = validCompanies.reduce((sum, c) => sum + (c.marketCapEur || 0), 0);
@@ -336,6 +396,73 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
           </p>
           <p style={{ margin: '2px 0', color: '#6b7280' }}>
             P/E Ratio: {data.peRatio?.toFixed(1) || 'N/A'}
+          </p>
+          <p style={{ margin: '2px 0 0 0', color: data.changePercent >= 0 ? '#10b981' : '#ef4444' }}>
+            Change: {formatPercent(data.changePercent)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomValuationTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          padding: '12px',
+          border: '1px solid rgba(0, 0, 0, 0.1)',
+          borderRadius: '8px',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+          maxWidth: '200px'
+        }}>
+          <p style={{ margin: 0, fontWeight: 600, color: '#1f2937' }}>{data.name}</p>
+          <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6b7280' }}>({data.ticker})</p>
+          <p style={{ margin: '6px 0 2px 0', color: '#374151' }}>
+            EPS: €{data.x?.toFixed(2)}
+          </p>
+          <p style={{ margin: '2px 0', color: '#6b7280' }}>
+            P/E Ratio: {data.y?.toFixed(1)}
+          </p>
+          <p style={{ margin: '2px 0', color: '#6b7280' }}>
+            Market Cap: {formatCurrency(data.marketCap)}
+          </p>
+          <p style={{ margin: '2px 0 0 0', color: data.changePercent >= 0 ? '#10b981' : '#ef4444' }}>
+            Change: {formatPercent(data.changePercent)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomRangeTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          padding: '12px',
+          border: '1px solid rgba(0, 0, 0, 0.1)',
+          borderRadius: '8px',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+          maxWidth: '200px'
+        }}>
+          <p style={{ margin: 0, fontWeight: 600, color: '#1f2937' }}>{data.fullName}</p>
+          <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6b7280' }}>({data.ticker})</p>
+          <p style={{ margin: '6px 0 2px 0', color: '#374151' }}>
+            Position: {data.position?.toFixed(1)}% of 52W range
+          </p>
+          <p style={{ margin: '2px 0', color: '#6b7280' }}>
+            Current: {formatCurrency(data.current)}
+          </p>
+          <p style={{ margin: '2px 0', color: '#10b981' }}>
+            52W High: {formatCurrency(data.high)}
+          </p>
+          <p style={{ margin: '2px 0', color: '#ef4444' }}>
+            52W Low: {formatCurrency(data.low)}
           </p>
           <p style={{ margin: '2px 0 0 0', color: data.changePercent >= 0 ? '#10b981' : '#ef4444' }}>
             Change: {formatPercent(data.changePercent)}
@@ -434,18 +561,11 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
                 tickFormatter={(value) => `${value}B`}
               />
               <Tooltip content={<CustomScatterTooltip />} />
-              {selectedCompanyIds.size > 1 ? (
-                scatterData.map((entry) => (
-                  <Scatter
-                    key={entry.ticker}
-                    data={[entry]}
-                    fill={entry.color}
-                    name={entry.name}
-                  />
-                ))
-              ) : (
-                <Scatter name="Companies" dataKey="y" fill="#3b82f6" />
-              )}
+              <Scatter name="Companies" dataKey="y">
+                {scatterData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -470,6 +590,111 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
             )}
           </BarChart>
         </ResponsiveContainer>
+      </ChartCard>
+
+      <ChartsGrid>
+        <ChartCard>
+          <ChartTitle>P/E Ratio vs EPS Relationship</ChartTitle>
+          <ResponsiveContainer width="100%" height={300}>
+            <ScatterChart data={valuationData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
+              <XAxis 
+                type="number" 
+                dataKey="x" 
+                name="EPS (€)" 
+                tickFormatter={(value) => `€${value}`}
+              />
+              <YAxis 
+                type="number" 
+                dataKey="y" 
+                name="P/E Ratio" 
+              />
+              <Tooltip content={<CustomValuationTooltip />} />
+              <Scatter name="Companies" dataKey="y">
+                {valuationData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard>
+          <ChartTitle>52-Week Price Position</ChartTitle>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={performanceRangeData.slice(0, 10)}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
+              <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+              <YAxis tickFormatter={(value) => `${value}%`} />
+              <Tooltip content={<CustomRangeTooltip />} />
+              {selectedCompanyIds.size > 1 ? (
+                <Bar dataKey="position" radius={[4, 4, 0, 0]}>
+                  {performanceRangeData.slice(0, 10).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              ) : (
+                <Bar dataKey="position" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              )}
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </ChartsGrid>
+
+      <ChartCard>
+        <ChartTitle>Market Performance Quadrants (Value vs Growth)</ChartTitle>
+        <ResponsiveContainer width="100%" height={400}>
+          <ScatterChart data={quadrantData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
+            <XAxis 
+              type="number" 
+              dataKey="x" 
+              name="Price Change %" 
+              domain={['dataMin - 1', 'dataMax + 1']}
+              tickFormatter={(value) => `${value}%`}
+            />
+            <YAxis 
+              type="number" 
+              dataKey="y" 
+              name="P/E Ratio"
+              domain={['dataMin - 2', 'dataMax + 2']}
+            />
+            <Tooltip content={<CustomValuationTooltip />} />
+            <Scatter name="Companies" dataKey="y">
+              {quadrantData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Scatter>
+            {/* Reference lines for quadrants */}
+            <line x1="0%" y1="0%" x2="0%" y2="100%" stroke="#94a3b8" strokeDasharray="5,5" />
+            <line x1="0%" y1="20" x2="100%" y2="20" stroke="#94a3b8" strokeDasharray="5,5" />
+          </ScatterChart>
+        </ResponsiveContainer>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: '1fr 1fr', 
+          gap: '16px', 
+          marginTop: '16px',
+          fontSize: '12px',
+          color: '#6b7280'
+        }}>
+          <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px' }}>
+            <strong style={{ color: '#10b981' }}>Value + Growth</strong><br/>
+            Low P/E + Positive Change
+          </div>
+          <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px' }}>
+            <strong style={{ color: '#f59e0b' }}>Expensive Growth</strong><br/>
+            High P/E + Positive Change
+          </div>
+          <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px' }}>
+            <strong style={{ color: '#3b82f6' }}>Undervalued</strong><br/>
+            Low P/E + Negative Change
+          </div>
+          <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px' }}>
+            <strong style={{ color: '#ef4444' }}>Risky</strong><br/>
+            High P/E + Negative Change
+          </div>
+        </div>
       </ChartCard>
 
       <TableContainer>
