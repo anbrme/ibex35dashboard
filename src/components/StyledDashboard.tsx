@@ -4,6 +4,7 @@ import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Spar
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
 import { CytoscapeNetworkGraph } from './enhanced/CytoscapeNetworkGraph';
 import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
+import { ComprehensiveInsights } from './insights/ComprehensiveInsights';
 
 // Global styles
 const GlobalStyle = createGlobalStyle`
@@ -664,7 +665,7 @@ export function StyledDashboard() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(new Set());
   const [expandedCompanyIds, setExpandedCompanyIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeView, setActiveView] = useState<'network' | 'sectors' | 'performance' | 'directors'>('network');
+  const [activeView, setActiveView] = useState<'network' | 'sectors' | 'performance' | 'directors' | 'insights'>('network');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string>('');
@@ -1055,6 +1056,7 @@ export function StyledDashboard() {
                 { id: 'sectors', label: 'Sectors', icon: PieChart, description: 'Market distribution' },
                 { id: 'performance', label: 'Performance', icon: LineChart, description: 'Price analysis' },
                 { id: 'directors', label: 'Directors', icon: Users, description: 'Board analysis' },
+                { id: 'insights', label: 'Financial Insights', icon: BarChart3, description: 'Advanced analytics' },
               ].map((tab) => {
                 const IconComponent = tab.icon;
                 const isActive = activeView === tab.id;
@@ -1083,6 +1085,7 @@ export function StyledDashboard() {
                 {activeView === 'sectors' && 'Sector Distribution'}
                 {activeView === 'performance' && 'Performance Overview'}
                 {activeView === 'directors' && 'Director Analysis'}
+                {activeView === 'insights' && 'Financial Intelligence Dashboard'}
               </VisualizationTitle>
               
               <VisualizationContent>
@@ -1144,6 +1147,8 @@ export function StyledDashboard() {
                 )}
                 
                 {activeView === 'directors' && <DirectorsAnalysisPanel companies={companies} selectedCompanyIds={selectedCompanyIds} />}
+                
+                {activeView === 'insights' && <ComprehensiveInsights companies={companies} selectedCompanyIds={selectedCompanyIds} />}
               </VisualizationContent>
             </VisualizationCard>
           </VisualizationArea>
