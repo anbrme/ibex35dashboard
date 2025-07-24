@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import styled, { createGlobalStyle, keyframes } from 'styled-components';
 import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
-import { SimpleNetworkGraph } from './enhanced/SimpleNetworkGraph';
+import { InteractiveNetworkGraph } from './enhanced/InteractiveNetworkGraph';
 
 // Global styles
 const GlobalStyle = createGlobalStyle`
@@ -947,7 +947,7 @@ export function StyledDashboard() {
               </VisualizationTitle>
               
               {activeView === 'network' && (
-                <SimpleNetworkGraph
+                <InteractiveNetworkGraph
                   companies={companies}
                   selectedCompanyIds={selectedCompanyIds}
                   width={800}
