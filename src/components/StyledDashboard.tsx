@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import styled, { createGlobalStyle, keyframes } from 'styled-components';
-import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3 } from 'lucide-react';
+import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, DollarSign, ArrowUp, ArrowDown, Percent } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
 import { CytoscapeNetworkGraph } from './enhanced/CytoscapeNetworkGraph';
 import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
@@ -315,15 +315,15 @@ const PriceLabel = styled.div`
 const MetricsGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 6px;
   margin-bottom: 16px;
 `;
 
 const MetricCard = styled.div<{ color: string }>`
   background: ${props => `linear-gradient(135deg, ${props.color}10, ${props.color}20)`};
   border: 1px solid ${props => `${props.color}30`};
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 10px;
+  padding: 10px;
 `;
 
 const MetricHeader = styled.div`
@@ -344,7 +344,7 @@ const MetricLabel = styled.div<{ color: string }>`
 `;
 
 const MetricValue = styled.div<{ color: string }>`
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   color: ${props => props.color};
 `;
@@ -612,6 +612,24 @@ const formatVolume = (volume: number): string => {
   return `€${volume.toFixed(0)}`;
 };
 
+const formatPERatio = (pe: number | null | undefined): string => {
+  return pe ? pe.toFixed(1) : 'N/A';
+};
+
+const formatEPS = (eps: number | null | undefined): string => {
+  return eps ? `€${eps.toFixed(2)}` : 'N/A';
+};
+
+const formatPrice52 = (price: number | null | undefined): string => {
+  return price ? `€${price.toFixed(2)}` : 'N/A';
+};
+
+const formatChangePercent = (percent: number | null | undefined): string => {
+  if (!percent) return 'N/A';
+  const sign = percent >= 0 ? '+' : '';
+  return `${sign}${percent.toFixed(2)}%`;
+};
+
 export function StyledDashboard() {
   const [companies, setCompanies] = useState<SecureIBEXCompanyData[]>([]);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(new Set());
@@ -831,7 +849,7 @@ export function StyledDashboard() {
                   <MetricsGrid>
                     <MetricCard color="#3b82f6">
                       <MetricHeader>
-                        <MetricIcon color="#3b82f6"><BarChart3 size={16} /></MetricIcon>
+                        <MetricIcon color="#3b82f6"><BarChart3 size={14} /></MetricIcon>
                         <MetricLabel color="#3b82f6">Market Cap</MetricLabel>
                       </MetricHeader>
                       <MetricValue color="#3b82f6">{formatMarketCap(company.marketCapEur || 0)}</MetricValue>
@@ -839,10 +857,58 @@ export function StyledDashboard() {
                     
                     <MetricCard color="#8b5cf6">
                       <MetricHeader>
-                        <MetricIcon color="#8b5cf6"><PieChart size={16} /></MetricIcon>
+                        <MetricIcon color="#8b5cf6"><PieChart size={14} /></MetricIcon>
                         <MetricLabel color="#8b5cf6">Volume</MetricLabel>
                       </MetricHeader>
                       <MetricValue color="#8b5cf6">{formatVolume(company.volumeEur || 0)}</MetricValue>
+                    </MetricCard>
+
+                    <MetricCard color="#10b981">
+                      <MetricHeader>
+                        <MetricIcon color="#10b981"><TrendingUp size={14} /></MetricIcon>
+                        <MetricLabel color="#10b981">P/E Ratio</MetricLabel>
+                      </MetricHeader>
+                      <MetricValue color="#10b981">{formatPERatio(company.peRatio)}</MetricValue>
+                    </MetricCard>
+                    
+                    <MetricCard color="#f59e0b">
+                      <MetricHeader>
+                        <MetricIcon color="#f59e0b"><DollarSign size={14} /></MetricIcon>
+                        <MetricLabel color="#f59e0b">EPS</MetricLabel>
+                      </MetricHeader>
+                      <MetricValue color="#f59e0b">{formatEPS(company.eps)}</MetricValue>
+                    </MetricCard>
+
+                    <MetricCard color="#ef4444">
+                      <MetricHeader>
+                        <MetricIcon color="#ef4444"><ArrowUp size={14} /></MetricIcon>
+                        <MetricLabel color="#ef4444">52W High</MetricLabel>
+                      </MetricHeader>
+                      <MetricValue color="#ef4444">{formatPrice52(company.high52)}</MetricValue>
+                    </MetricCard>
+                    
+                    <MetricCard color="#6366f1">
+                      <MetricHeader>
+                        <MetricIcon color="#6366f1"><ArrowDown size={14} /></MetricIcon>
+                        <MetricLabel color="#6366f1">52W Low</MetricLabel>
+                      </MetricHeader>
+                      <MetricValue color="#6366f1">{formatPrice52(company.low52)}</MetricValue>
+                    </MetricCard>
+
+                    <MetricCard color="#ec4899">
+                      <MetricHeader>
+                        <MetricIcon color="#ec4899"><Percent size={14} /></MetricIcon>
+                        <MetricLabel color="#ec4899">Change %</MetricLabel>
+                      </MetricHeader>
+                      <MetricValue color="#ec4899">{formatChangePercent(company.changePercent)}</MetricValue>
+                    </MetricCard>
+                    
+                    <MetricCard color="#06b6d4">
+                      <MetricHeader>
+                        <MetricIcon color="#06b6d4"><DollarSign size={14} /></MetricIcon>
+                        <MetricLabel color="#06b6d4">Price Change</MetricLabel>
+                      </MetricHeader>
+                      <MetricValue color="#06b6d4">{formatPrice52(company.priceChange)}</MetricValue>
                     </MetricCard>
                   </MetricsGrid>
 

@@ -10,8 +10,9 @@ export class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO companies (
         id, ticker, name, sector, current_price_eur, 
-        market_cap_eur, volume, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        market_cap_eur, volume, pe_ratio, eps, high_52, low_52, 
+        price_change, change_percent, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
 
     const batch = companiesData.map(company => 
@@ -22,7 +23,13 @@ export class DatabaseService {
         company.sector,
         company.currentPriceEur,
         company.marketCapEur,
-        company.volumeEur
+        company.volumeEur,
+        company.peRatio,
+        company.eps,
+        company.high52,
+        company.low52,
+        company.priceChange,
+        company.changePercent
       )
     );
 
@@ -114,7 +121,10 @@ export class DatabaseService {
   async getAllCompaniesWithDirectors() {
     const companies = await this.db.prepare(`
       SELECT 
-        c.*,
+        c.id, c.ticker, c.name, c.sector, c.sub_sector, c.isin,
+        c.current_price_eur, c.market_cap_eur, c.volume, c.change_percent,
+        c.price_change, c.pe_ratio, c.eps, c.high_52, c.low_52,
+        c.dividend_yield, c.website, c.created_at, c.updated_at,
         json_group_array(
           json_object(
             'name', p.name,
@@ -140,7 +150,10 @@ export class DatabaseService {
   async getCompanyByTicker(ticker) {
     const result = await this.db.prepare(`
       SELECT 
-        c.*,
+        c.id, c.ticker, c.name, c.sector, c.sub_sector, c.isin,
+        c.current_price_eur, c.market_cap_eur, c.volume, c.change_percent,
+        c.price_change, c.pe_ratio, c.eps, c.high_52, c.low_52,
+        c.dividend_yield, c.website, c.created_at, c.updated_at,
         json_group_array(
           json_object(
             'name', p.name,

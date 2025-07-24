@@ -18,6 +18,11 @@ export interface SecureIBEXCompanyData {
   volumeEur: number;
   changePercent?: number;
   priceChange?: number;
+  peRatio?: number;
+  eps?: number;
+  high52?: number;
+  low52?: number;
+  dividendYield?: number;
   directors: Director[];
 }
 
@@ -73,6 +78,11 @@ export class SecureGoogleSheetsService {
         volumeEur: rawCompany.volume || rawCompany.volumeEur || 0,
         changePercent: rawCompany.change_percent || rawCompany.changePercent || 0,
         priceChange: rawCompany.price_change || rawCompany.priceChange || 0,
+        peRatio: rawCompany.pe_ratio || rawCompany.peRatio || null,
+        eps: rawCompany.eps || null,
+        high52: rawCompany.high_52 || rawCompany.high52 || null,
+        low52: rawCompany.low_52 || rawCompany.low52 || null,
+        dividendYield: rawCompany.dividend_yield || rawCompany.dividendYield || null,
         directors: (rawCompany.directors || []).map((director: any) => ({
           name: director.name,
           position: director.position,

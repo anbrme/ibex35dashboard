@@ -258,7 +258,7 @@ async function fetchFromGoogleSheets(env) {
     
     // Fetch data from both sheets
     console.log('📋 Fetching companies from Sheet1...');
-    const companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:G');
+    const companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:L');
     
     console.log('👥 Fetching directors from Directors sheet...');
     let directorsData;
@@ -427,7 +427,7 @@ async function getAccessToken(jwt) {
 }
 
 // Fetch data from Google Sheets API
-async function fetchGoogleSheetsData(sheetId, accessToken, range = 'Sheet1!A2:G') {
+async function fetchGoogleSheetsData(sheetId, accessToken, range = 'Sheet1!A2:L') {
   console.log(`📊 Fetching data from Google Sheets range: ${range}`);
   
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueRenderOption=UNFORMATTED_VALUE`;
@@ -484,13 +484,19 @@ function transformSheetsData(companiesData, directorsData) {
     .map((row, index) => {
       try {
         const company = {
-          ticker: row[0] || '',
-          company: row[1] || '',
-          sector: row[2] || '',
-          formattedTicker: row[3] || '',
-          currentPriceEur: parseFloat(row[4]) || 0,
-          marketCapEur: parseFloat(row[5]) || 0,
-          volumeEur: parseFloat(row[6]) || 0,
+          company: row[0] || '',
+          sector: row[1] || '',
+          formattedTicker: row[2] || '',
+          currentPriceEur: parseFloat(row[3]) || 0,
+          marketCapEur: parseFloat(row[4]) || 0,
+          volumeEur: parseFloat(row[5]) || 0,
+          peRatio: parseFloat(row[6]) || null,
+          eps: parseFloat(row[7]) || null,
+          high52: parseFloat(row[8]) || null,
+          low52: parseFloat(row[9]) || null,
+          priceChange: parseFloat(row[10]) || null,
+          changePercent: parseFloat(row[11]) || null,
+          ticker: row[2] || '', // Use formatted ticker as the primary ticker
           directors: []
         };
         

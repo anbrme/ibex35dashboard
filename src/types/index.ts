@@ -7,6 +7,12 @@ export interface Company {
   change?: number;
   changePercent?: number;
   volume?: number;
+  priceChange?: number;
+  peRatio?: number;
+  eps?: number;
+  high52?: number;
+  low52?: number;
+  dividendYield?: number;
 }
 
 export interface CompanyDetails extends Company {
