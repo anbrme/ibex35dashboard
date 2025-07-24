@@ -258,7 +258,17 @@ async function fetchFromGoogleSheets(env) {
     
     // Fetch data from both sheets
     console.log('📋 Fetching companies from Sheet1...');
-    const companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:L');
+    // Try to fetch the extended range first, fall back to original range if needed
+    let companiesData;
+    try {
+      console.log('🔍 Attempting to fetch extended range A2:L...');
+      companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:L');
+      console.log('✅ Successfully fetched extended range');
+    } catch (error) {
+      console.warn('⚠️ Extended range failed, trying original range A2:G:', error.message);
+      companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:G');
+      console.log('✅ Successfully fetched original range');
+    }
     
     console.log('👥 Fetching directors from Directors sheet...');
     let directorsData;
@@ -446,6 +456,21 @@ async function fetchGoogleSheetsData(sheetId, accessToken, range = 'Sheet1!A2:L'
   return await response.json();
 }
 
+// Helper function to parse financial values, handling #N/A from Google Finance
+function parseFinancialValue(value) {
+  if (!value) return null;
+  
+  // Handle Google Finance #N/A values
+  const stringValue = String(value).trim();
+  if (stringValue === '#N/A' || stringValue === '#ERROR!' || stringValue === '' || stringValue === 'N/A') {
+    return null;
+  }
+  
+  // Try to parse as number
+  const parsed = parseFloat(stringValue);
+  return isNaN(parsed) ? null : parsed;
+}
+
 // Transform Google Sheets data to application format
 function transformSheetsData(companiesData, directorsData) {
   const companyRows = companiesData.values || [];
@@ -490,12 +515,12 @@ function transformSheetsData(companiesData, directorsData) {
           currentPriceEur: parseFloat(row[3]) || 0,
           marketCapEur: parseFloat(row[4]) || 0,
           volumeEur: parseFloat(row[5]) || 0,
-          peRatio: parseFloat(row[6]) || null,
-          eps: parseFloat(row[7]) || null,
-          high52: parseFloat(row[8]) || null,
-          low52: parseFloat(row[9]) || null,
-          priceChange: parseFloat(row[10]) || null,
-          changePercent: parseFloat(row[11]) || null,
+          peRatio: parseFinancialValue(row[6]),
+          eps: parseFinancialValue(row[7]),
+          high52: parseFinancialValue(row[8]),
+          low52: parseFinancialValue(row[9]),
+          priceChange: parseFinancialValue(row[10]),
+          changePercent: parseFinancialValue(row[11]),
           ticker: row[2] || '', // Use formatted ticker as the primary ticker
           directors: []
         };
