@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IBEX35 API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .response-area {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #e9ecef;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .loading {
+            color: #6c757d;
+            font-style: italic;
+        }
+        .metadata {
+            background: #e7f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+        .sample-data {
+            margin-top: 15px;
+        }
+        .data-structure {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>IBEX35 API Test Tool</h1>
+        <p>This tool tests the Cloudflare Worker API and displays the actual response structure.</p>
+        
+        <div class="test-section">
+            <h3>API Endpoint Test</h3>
+            <div class="metadata">
+                <strong>URL:</strong> https://ibex35-sheets-api.anurnberg.workers.dev/api/companies
+            </div>
+            
+            <button onclick="testAPI()" id="testBtn">Test API</button>
+            <button onclick="clearResults()" id="clearBtn">Clear Results</button>
+            
+            <div id="status" class="metadata" style="display: none;"></div>
+            
+            <h4>Raw Response:</h4>
+            <div id="rawResponse" class="response-area">Click "Test API" to see the raw response...</div>
+            
+            <div class="data-structure">
+                <h4>Data Structure Analysis:</h4>
+                <div id="dataStructure">Will appear after API call...</div>
+            </div>
+            
+            <div class="sample-data">
+                <h4>Sample Data (First 3 items):</h4>
+                <div id="sampleData" class="response-area">Will appear after API call...</div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>Response Headers</h3>
+            <div id="responseHeaders" class="response-area">Will appear after API call...</div>
+        </div>
+        
+        <div class="test-section">
+            <h3>Network Information</h3>
+            <div id="networkInfo" class="response-area">Will appear after API call...</div>
+        </div>
+    </div>
+
+    <script>
+        async function testAPI() {
+            const testBtn = document.getElementById('testBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const status = document.getElementById('status');
+            const rawResponse = document.getElementById('rawResponse');
+            const dataStructure = document.getElementById('dataStructure');
+            const sampleData = document.getElementById('sampleData');
+            const responseHeaders = document.getElementById('responseHeaders');
+            const networkInfo = document.getElementById('networkInfo');
+            
+            // Reset UI
+            testBtn.disabled = true;
+            testBtn.textContent = 'Testing...';
+            status.style.display = 'block';
+            status.className = 'metadata loading';
+            status.textContent = 'Making API request...';
+            
+            const startTime = performance.now();
+            
+            try {
+                const response = await fetch('https://ibex35-sheets-api.anurnberg.workers.dev/api/companies', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
+                
+                // Get response headers
+                const headers = {};
+                for (let [key, value] of response.headers.entries()) {
+                    headers[key] = value;
+                }
+                
+                // Network info
+                const networkData = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url: response.url,
+                    type: response.type,
+                    ok: response.ok,
+                    redirected: response.redirected,
+                    duration: duration + 'ms',
+                    timestamp: new Date().toISOString()
+                };
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update status
+                    status.className = 'metadata success';
+                    status.textContent = `✅ Success! Response received in ${duration}ms`;
+                    
+                    // Raw response
+                    rawResponse.textContent = JSON.stringify(data, null, 2);
+                    rawResponse.className = 'response-area success';
+                    
+                    // Analyze data structure
+                    analyzeDataStructure(data, dataStructure);
+                    
+                    // Show sample data
+                    showSampleData(data, sampleData);
+                    
+                    // Show headers
+                    responseHeaders.textContent = JSON.stringify(headers, null, 2);
+                    
+                    // Show network info
+                    networkInfo.textContent = JSON.stringify(networkData, null, 2);
+                    
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+            } catch (error) {
+                console.error('API Test Error:', error);
+                
+                status.className = 'metadata error';
+                status.textContent = `❌ Error: ${error.message}`;
+                
+                rawResponse.textContent = `Error: ${error.message}\n\nThis could be due to:\n- CORS policy\n- Network connectivity\n- API endpoint is down\n- Invalid URL`;
+                rawResponse.className = 'response-area error';
+                
+                dataStructure.textContent = 'No data structure available due to error';
+                sampleData.textContent = 'No sample data available due to error';
+                responseHeaders.textContent = 'No headers available due to error';
+                networkInfo.textContent = `Error occurred at: ${new Date().toISOString()}\nError: ${error.message}`;
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = 'Test API';
+            }
+        }
+        
+        function analyzeDataStructure(data, container) {
+            let analysis = '';
+            
+            if (Array.isArray(data)) {
+                analysis += `📊 Array with ${data.length} items\n\n`;
+                
+                if (data.length > 0) {
+                    const firstItem = data[0];
+                    analysis += '🔍 Structure of first item:\n';
+                    analysis += analyzeObject(firstItem, '  ');
+                    
+                    // Check if all items have the same structure
+                    if (data.length > 1) {
+                        const keys1 = Object.keys(firstItem || {});
+                        const allSameStructure = data.every(item => {
+                            const keys2 = Object.keys(item || {});
+                            return keys1.length === keys2.length && 
+                                   keys1.every(key => keys2.includes(key));
+                        });
+                        
+                        analysis += `\n✅ All items have ${allSameStructure ? 'consistent' : 'different'} structure\n`;
+                    }
+                }
+            } else if (typeof data === 'object' && data !== null) {
+                analysis += '📋 Single object:\n';
+                analysis += analyzeObject(data, '  ');
+            } else {
+                analysis += `📄 Primitive value: ${typeof data}\n`;
+                analysis += `Value: ${data}`;
+            }
+            
+            container.textContent = analysis;
+        }
+        
+        function analyzeObject(obj, indent = '') {
+            let result = '';
+            const keys = Object.keys(obj || {});
+            
+            keys.forEach(key => {
+                const value = obj[key];
+                const type = Array.isArray(value) ? 'array' : typeof value;
+                
+                if (type === 'array') {
+                    result += `${indent}${key}: Array[${value.length}]\n`;
+                    if (value.length > 0) {
+                        result += `${indent}  └─ Item type: ${typeof value[0]}\n`;
+                    }
+                } else if (type === 'object' && value !== null) {
+                    result += `${indent}${key}: Object\n`;
+                    const subKeys = Object.keys(value);
+                    if (subKeys.length <= 5) {
+                        result += analyzeObject(value, indent + '  ');
+                    } else {
+                        result += `${indent}  └─ ${subKeys.length} properties\n`;
+                    }
+                } else {
+                    const preview = type === 'string' && value.length > 50 ? 
+                                   value.substring(0, 50) + '...' : value;
+                    result += `${indent}${key}: ${type} = ${preview}\n`;
+                }
+            });
+            
+            return result;
+        }
+        
+        function showSampleData(data, container) {
+            let sample = '';
+            
+            if (Array.isArray(data)) {
+                const sampleSize = Math.min(3, data.length);
+                sample = JSON.stringify(data.slice(0, sampleSize), null, 2);
+                
+                if (data.length > 3) {
+                    sample += `\n\n... and ${data.length - 3} more items`;
+                }
+            } else {
+                sample = JSON.stringify(data, null, 2);
+            }
+            
+            container.textContent = sample;
+        }
+        
+        function clearResults() {
+            document.getElementById('rawResponse').textContent = 'Click "Test API" to see the raw response...';
+            document.getElementById('rawResponse').className = 'response-area';
+            document.getElementById('dataStructure').textContent = 'Will appear after API call...';
+            document.getElementById('sampleData').textContent = 'Will appear after API call...';
+            document.getElementById('responseHeaders').textContent = 'Will appear after API call...';
+            document.getElementById('networkInfo').textContent = 'Will appear after API call...';
+            document.getElementById('status').style.display = 'none';
+        }
+        
+        // Auto-run test on page load
+        window.addEventListener('load', () => {
+            console.log('API Test Tool loaded. Ready to test the IBEX35 API.');
+        });
+    </script>
+</body>
+</html>

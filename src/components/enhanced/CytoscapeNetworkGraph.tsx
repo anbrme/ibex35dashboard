@@ -164,31 +164,35 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         }
       });
 
-      // Add director nodes
-      company.directors.forEach((director, idx) => {
-        const directorId = `dir_${company.ticker}_${idx}`;
-        elements.push({
-          data: {
-            id: directorId,
-            label: director.name.split(' ').slice(0, 2).join(' '),
-            type: 'director',
-            director: director,
-            company: company,
-            size: 40,
-            color: '#8b5cf6'
-          }
-        });
+      // Add director nodes (with null safety)
+      if (company.directors && Array.isArray(company.directors)) {
+        company.directors.forEach((director, idx) => {
+          if (director && director.name) {
+            const directorId = `dir_${company.ticker}_${idx}`;
+            elements.push({
+              data: {
+                id: directorId,
+                label: director.name.split(' ').slice(0, 2).join(' '),
+                type: 'director',
+                director: director,
+                company: company,
+                size: 40,
+                color: '#8b5cf6'
+              }
+            });
 
-        // Add edge between company and director
-        elements.push({
-          data: {
-            id: `edge_${company.ticker}_${directorId}`,
-            source: company.ticker,
-            target: directorId,
-            type: 'board_member'
+            // Add edge between company and director
+            elements.push({
+              data: {
+                id: `edge_${company.ticker}_${directorId}`,
+                source: company.ticker,
+                target: directorId,
+                type: 'board_member'
+              }
+            });
           }
         });
-      });
+      }
     });
 
     // Initialize Cytoscape
@@ -330,9 +334,11 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       
       let tooltipText = '';
       if (data.type === 'company') {
-        tooltipText = `${data.company.company}\n${data.company.sector}\n${data.company.directors.length} directors\nMarket Cap: €${(data.company.marketCapEur / 1e9).toFixed(1)}B`;
-      } else {
-        tooltipText = `${data.director.name}\n${data.director.position}\n${data.company.company}`;
+        const directorsCount = data.company.directors && Array.isArray(data.company.directors) ? data.company.directors.length : 0;
+        const marketCap = data.company.marketCapEur || 0;
+        tooltipText = `${data.company.company || 'Unknown Company'}\n${data.company.sector || 'Unknown Sector'}\n${directorsCount} directors\nMarket Cap: €${(marketCap / 1e9).toFixed(1)}B`;
+      } else if (data.director) {
+        tooltipText = `${data.director.name || 'Unknown Director'}\n${data.director.position || 'Director'}\n${data.company.company || 'Unknown Company'}`;
         if (data.director.appointmentDate) {
           tooltipText += `\nSince: ${data.director.appointmentDate}`;
         }

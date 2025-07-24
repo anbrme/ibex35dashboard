@@ -34,7 +34,7 @@ const pulse = keyframes`
 
 // Styled components
 const Container = styled.div`
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 50%, #581c87 100%);
 `;
@@ -47,6 +47,7 @@ const LeftPanel = styled.div`
   display: flex;
   flex-direction: column;
   box-shadow: 20px 0 40px rgba(0, 0, 0, 0.1);
+  min-height: 100vh;
 `;
 
 const Header = styled.div`
@@ -388,6 +389,7 @@ const RightPanel = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
 `;
 
 const MetricsBar = styled.div`
@@ -467,7 +469,7 @@ const TabDescription = styled.div`
 const VisualizationArea = styled.div`
   flex: 1;
   padding: 24px;
-  overflow: hidden;
+  min-height: 600px;
 `;
 
 const VisualizationCard = styled.div`
@@ -475,9 +477,12 @@ const VisualizationCard = styled.div`
   backdrop-filter: blur(20px);
   border-radius: 20px;
   padding: 24px;
-  height: 100%;
+  min-height: 500px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 24px;
 `;
 
 const VisualizationTitle = styled.h2`
@@ -485,6 +490,14 @@ const VisualizationTitle = styled.h2`
   font-weight: 700;
   color: #1f2937;
   margin: 0 0 24px 0;
+  flex-shrink: 0;
+`;
+
+const VisualizationContent = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
 `;
 
 const LoadingContainer = styled.div`
@@ -947,79 +960,83 @@ export function StyledDashboard() {
                 {activeView === 'directors' && 'Director Analysis'}
               </VisualizationTitle>
               
-              {activeView === 'network' && (
-                <CytoscapeNetworkGraph
-                  companies={companies}
-                  selectedCompanyIds={selectedCompanyIds}
-                  width={800}
-                  height={500}
-                />
-              )}
-              
-              {activeView === 'sectors' && (
-                <MetricsGrid>
-                  {Object.entries(
-                    companies
-                      .filter(c => selectedCompanyIds.size === 0 || selectedCompanyIds.has(c.ticker))
-                      .reduce((acc, company) => {
-                        acc[company.sector] = (acc[company.sector] || 0) + 1;
-                        return acc;
-                      }, {} as Record<string, number>)
-                  ).map(([sector, count]) => (
-                    <MetricCard key={sector} color="#3b82f6">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>{sector}</span>
-                        <Badge style={{ background: '#3b82f6', color: 'white', border: 'none' }}>{count}</Badge>
-                      </div>
-                    </MetricCard>
-                  ))}
-                </MetricsGrid>
-              )}
-              
-              {activeView === 'performance' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {companies
-                    .filter(c => selectedCompanyIds.size === 0 || selectedCompanyIds.has(c.ticker))
-                    .sort((a, b) => b.marketCapEur - a.marketCapEur)
-                    .slice(0, 10)
-                    .map(company => {
-                      const mockChange = SecureGoogleSheetsService.calculateMockChange();
-                      return (
-                        <MetricCard key={company.ticker} color="#3b82f6">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                            <span style={{ width: 80, fontSize: 14, fontWeight: 500 }}>
-                              {company.formattedTicker || company.ticker}
-                            </span>
-                            <div style={{ 
-                              flex: 1, 
-                              height: 24, 
-                              background: '#f3f4f6', 
-                              borderRadius: 12, 
-                              overflow: 'hidden',
-                              position: 'relative'
-                            }}>
-                              <div
-                                style={{
-                                  height: '100%',
-                                  width: `${Math.abs(mockChange.changePercent) * 10}%`,
-                                  background: mockChange.changePercent >= 0 ? 
-                                    'linear-gradient(135deg, #10b981, #059669)' : 
-                                    'linear-gradient(135deg, #ef4444, #dc2626)',
-                                  transition: 'width 0.3s ease'
-                                }}
-                              />
-                            </div>
-                            <ChangeBadge isPositive={mockChange.changePercent >= 0}>
-                              {mockChange.changePercent >= 0 ? '+' : ''}{mockChange.changePercent.toFixed(2)}%
-                            </ChangeBadge>
+              <VisualizationContent>
+                {activeView === 'network' && (
+                  <CytoscapeNetworkGraph
+                    companies={companies}
+                    selectedCompanyIds={selectedCompanyIds}
+                    width={800}
+                    height={500}
+                  />
+                )}
+                
+                {activeView === 'sectors' && (
+                  <div style={{ overflow: 'auto', minHeight: '400px' }}>
+                    <MetricsGrid>
+                      {Object.entries(
+                        companies
+                          .filter(c => selectedCompanyIds.size === 0 || selectedCompanyIds.has(c.ticker))
+                          .reduce((acc, company) => {
+                            acc[company.sector] = (acc[company.sector] || 0) + 1;
+                            return acc;
+                          }, {} as Record<string, number>)
+                      ).map(([sector, count]) => (
+                        <MetricCard key={sector} color="#3b82f6">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>{sector}</span>
+                            <Badge style={{ background: '#3b82f6', color: 'white', border: 'none' }}>{count}</Badge>
                           </div>
                         </MetricCard>
-                      );
-                    })}
-                </div>
-              )}
-              
-              {activeView === 'directors' && <DirectorsAnalysisPanel companies={companies} selectedCompanyIds={selectedCompanyIds} />}
+                      ))}
+                    </MetricsGrid>
+                  </div>
+                )}
+                
+                {activeView === 'performance' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflow: 'auto', minHeight: '400px' }}>
+                    {companies
+                      .filter(c => selectedCompanyIds.size === 0 || selectedCompanyIds.has(c.ticker))
+                      .sort((a, b) => b.marketCapEur - a.marketCapEur)
+                      .slice(0, 10)
+                      .map(company => {
+                        const mockChange = SecureGoogleSheetsService.calculateMockChange();
+                        return (
+                          <MetricCard key={company.ticker} color="#3b82f6">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                              <span style={{ width: 80, fontSize: 14, fontWeight: 500 }}>
+                                {company.formattedTicker || company.ticker}
+                              </span>
+                              <div style={{ 
+                                flex: 1, 
+                                height: 24, 
+                                background: '#f3f4f6', 
+                                borderRadius: 12, 
+                                overflow: 'hidden',
+                                position: 'relative'
+                              }}>
+                                <div
+                                  style={{
+                                    height: '100%',
+                                    width: `${Math.abs(mockChange.changePercent) * 10}%`,
+                                    background: mockChange.changePercent >= 0 ? 
+                                      'linear-gradient(135deg, #10b981, #059669)' : 
+                                      'linear-gradient(135deg, #ef4444, #dc2626)',
+                                    transition: 'width 0.3s ease'
+                                  }}
+                                />
+                              </div>
+                              <ChangeBadge isPositive={mockChange.changePercent >= 0}>
+                                {mockChange.changePercent >= 0 ? '+' : ''}{mockChange.changePercent.toFixed(2)}%
+                              </ChangeBadge>
+                            </div>
+                          </MetricCard>
+                        );
+                      })}
+                  </div>
+                )}
+                
+                {activeView === 'directors' && <DirectorsAnalysisPanel companies={companies} selectedCompanyIds={selectedCompanyIds} />}
+              </VisualizationContent>
             </VisualizationCard>
           </VisualizationArea>
         </RightPanel>

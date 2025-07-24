@@ -14,23 +14,51 @@ const Container = styled.div`
   gap: 16px;
   height: 100%;
   overflow-y: auto;
+  padding-right: 8px;
+  
+  /* Custom scrollbar */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+    
+    &:hover {
+      background: rgba(0, 0, 0, 0.3);
+    }
+  }
 `;
 
-const CompanyCard = styled.div`
+const CompanyCard = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'expanded'
+})<{ expanded: boolean }>`
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(29, 78, 216, 0.05));
   border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
+  position: relative;
+  z-index: ${props => props.expanded ? 10 : 1};
+  margin-bottom: ${props => props.expanded ? '24px' : '0px'};
   
   &:hover {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
     transform: translateY(-2px);
+    z-index: ${props => props.expanded ? 10 : 5};
   }
 `;
 
-const CompanyHeader = styled.div<{ expanded: boolean }>`
+const CompanyHeader = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'expanded'
+})<{ expanded: boolean }>`
   padding: 20px;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(29, 78, 216, 0.1));
   cursor: pointer;
@@ -95,7 +123,9 @@ const DirectorsBadge = styled.div`
   box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
 `;
 
-const ExpandIcon = styled.div<{ expanded: boolean }>`
+const ExpandIcon = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'expanded'
+})<{ expanded: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
@@ -111,10 +141,31 @@ const ExpandIcon = styled.div<{ expanded: boolean }>`
   }
 `;
 
-const DirectorsList = styled.div<{ expanded: boolean }>`
-  max-height: ${props => props.expanded ? '1000px' : '0px'};
-  overflow: hidden;
+const DirectorsList = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'expanded'
+})<{ expanded: boolean }>`
+  max-height: ${props => props.expanded ? '800px' : '0px'};
+  overflow-y: ${props => props.expanded ? 'auto' : 'hidden'};
   transition: max-height 0.3s ease;
+  
+  /* Custom scrollbar for directors list */
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 2px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.3);
+    border-radius: 2px;
+    
+    &:hover {
+      background: rgba(59, 130, 246, 0.5);
+    }
+  }
 `;
 
 const DirectorsGrid = styled.div`
@@ -262,7 +313,7 @@ export function DirectorsAnalysisPanel({ companies, selectedCompanyIds }: Props)
         const isExpanded = expandedCompanies.has(company.ticker);
         
         return (
-          <CompanyCard key={company.ticker}>
+          <CompanyCard key={company.ticker} expanded={isExpanded}>
             <CompanyHeader 
               expanded={isExpanded}
               onClick={() => toggleCompany(company.ticker)}
