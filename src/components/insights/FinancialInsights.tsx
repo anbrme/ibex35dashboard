@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import styled from 'styled-components';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ScatterChart, Scatter, ResponsiveContainer } from 'recharts';
-import { TrendingUp, DollarSign, BarChart3, PieChart as PieChartIcon } from 'lucide-react';
-import { SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ScatterChart, Scatter, ResponsiveContainer } from 'recharts';
+import { BarChart3 } from 'lucide-react';
+import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 
 interface FinancialInsightsProps {
   companies: SecureIBEXCompanyData[];
@@ -200,7 +200,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
       .map(([sector, marketCap]) => ({
         name: sector,
         value: marketCap,
-        percentage: ((marketCap / Object.values(sectorMap).reduce((a, b) => a + b, 0)) * 100).toFixed(1),
+        percentage: ((marketCap / Object.values(sectorMap).reduce((a: number, b: number) => a + b, 0)) * 100).toFixed(1),
         color: SECTOR_COLORS[sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
       }))
       .sort((a, b) => b.value - a.value);
@@ -244,7 +244,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
     };
   }, [filteredCompanies]);
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
