@@ -197,6 +197,20 @@ const COMPANY_COLORS = [
   '#fb923c', '#e11d48', '#7c3aed', '#0284c7', '#16a34a'
 ];
 
+// Function to get consistent color for a company
+const getCompanyColor = (ticker: string, selectedCompanies: SecureIBEXCompanyData[], selectedCompanyIds: Set<string>): string => {
+  if (selectedCompanyIds.size <= 1) {
+    // Single company or none selected - use sector colors
+    const company = selectedCompanies.find(c => c.ticker === ticker);
+    return SECTOR_COLORS[company?.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others;
+  }
+  
+  // Multiple companies selected - use consistent company-based colors
+  const sortedTickers = Array.from(selectedCompanyIds).sort();
+  const index = sortedTickers.indexOf(ticker);
+  return COMPANY_COLORS[index % COMPANY_COLORS.length];
+};
+
 const formatCurrency = (value: number | null | undefined): string => {
   if (!value) return '€0';
   if (value >= 1e9) return `€${(value / 1e9).toFixed(1)}B`;
@@ -241,7 +255,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
   const scatterData = useMemo(() => {
     return filteredCompanies
       .filter(c => c.marketCapEur && c.changePercent !== null)
-      .map((company, index) => ({
+      .map((company) => ({
         x: company.changePercent || 0,
         y: (company.marketCapEur || 0) / 1e9, // Convert to billions
         name: company.company,
@@ -250,9 +264,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
         marketCap: company.marketCapEur || 0,
         changePercent: company.changePercent || 0,
         currentPrice: company.currentPriceEur,
-        color: selectedCompanyIds.size > 1 
-          ? COMPANY_COLORS[index % COMPANY_COLORS.length]
-          : SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
+        color: getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)
       }));
   }, [filteredCompanies, selectedCompanyIds.size]);
 
@@ -261,16 +273,14 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
       .filter(c => c.eps !== null)
       .sort((a, b) => (b.eps || 0) - (a.eps || 0))
       .slice(0, 10) // Top 10 by EPS
-      .map((company, index) => ({
+      .map((company) => ({
         name: company.company.length > 12 ? company.company.substring(0, 12) + '...' : company.company,
         fullName: company.company,
         ticker: company.ticker,
         eps: company.eps || 0,
         peRatio: company.peRatio || 0,
         changePercent: company.changePercent || 0,
-        color: selectedCompanyIds.size > 1 
-          ? COMPANY_COLORS[index % COMPANY_COLORS.length]
-          : SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
+        color: getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)
       }));
   }, [filteredCompanies, selectedCompanyIds.size]);
 
@@ -278,7 +288,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
   const valuationData = useMemo(() => {
     return filteredCompanies
       .filter(c => c.eps && c.peRatio)
-      .map((company, index) => ({
+      .map((company) => ({
         x: company.eps || 0,
         y: company.peRatio || 0,
         name: company.company,
@@ -286,9 +296,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
         sector: company.sector,
         marketCap: company.marketCapEur || 0,
         changePercent: company.changePercent || 0,
-        color: selectedCompanyIds.size > 1 
-          ? COMPANY_COLORS[index % COMPANY_COLORS.length]
-          : SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
+        color: getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)
       }));
   }, [filteredCompanies, selectedCompanyIds.size]);
 
@@ -296,7 +304,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
   const performanceRangeData = useMemo(() => {
     return filteredCompanies
       .filter(c => c.high52 && c.low52 && c.currentPriceEur)
-      .map((company, index) => {
+      .map((company) => {
         const range = (company.high52! - company.low52!);
         const position = range > 0 ? ((company.currentPriceEur - company.low52!) / range) * 100 : 50;
         return {
@@ -309,7 +317,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
           current: company.currentPriceEur,
           changePercent: company.changePercent || 0,
           color: selectedCompanyIds.size > 1 
-            ? COMPANY_COLORS[index % COMPANY_COLORS.length]
+            ? getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)
             : (position > 70 ? '#10b981' : position < 30 ? '#ef4444' : '#f59e0b')
         };
       })
@@ -320,7 +328,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
   const quadrantData = useMemo(() => {
     return filteredCompanies
       .filter(c => c.peRatio && c.changePercent !== null)
-      .map((company, index) => ({
+      .map((company) => ({
         x: company.changePercent || 0,
         y: company.peRatio || 0,
         name: company.company,
@@ -328,9 +336,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
         sector: company.sector,
         marketCap: company.marketCapEur || 0,
         eps: company.eps || 0,
-        color: selectedCompanyIds.size > 1 
-          ? COMPANY_COLORS[index % COMPANY_COLORS.length]
-          : SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
+        color: getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)
       }));
   }, [filteredCompanies, selectedCompanyIds.size]);
 
@@ -508,9 +514,9 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
       {selectedCompanyIds.size > 1 && (
         <ColorLegend>
           <strong style={{ marginRight: '8px' }}>Selected Companies:</strong>
-          {filteredCompanies.map((company, index) => (
+          {filteredCompanies.map((company) => (
             <LegendItem key={company.ticker}>
-              <ColorDot color={COMPANY_COLORS[index % COMPANY_COLORS.length]} />
+              <ColorDot color={getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)} />
               <span>{company.company}</span>
               <Ticker>{company.ticker}</Ticker>
             </LegendItem>
