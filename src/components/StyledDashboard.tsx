@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import styled, { createGlobalStyle, keyframes } from 'styled-components';
-import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
+import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3 } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
 import { CytoscapeNetworkGraph } from './enhanced/CytoscapeNetworkGraph';
 import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
@@ -311,24 +311,6 @@ const PriceLabel = styled.div`
   margin-top: 4px;
 `;
 
-const ChangeBadge = styled.div.withConfig({
-  shouldForwardProp: (prop) => prop !== 'isPositive'
-})<{ isPositive: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  background: ${props => props.isPositive ? 
-    'linear-gradient(135deg, #10b981, #059669)' : 
-    'linear-gradient(135deg, #ef4444, #dc2626)'};
-  color: white;
-  box-shadow: 0 4px 16px ${props => props.isPositive ? 
-    'rgba(16, 185, 129, 0.3)' : 
-    'rgba(239, 68, 68, 0.3)'};
-`;
 
 const MetricsGrid = styled.div`
   display: grid;
@@ -818,8 +800,6 @@ export function StyledDashboard() {
           
           <CompanyList>
             {filteredCompanies.map((company) => {
-              const mockChange = SecureGoogleSheetsService.calculateMockChange();
-              const isPositive = mockChange.changePercent >= 0;
               const isSelected = selectedCompanyIds.has(company.ticker);
               
               return (
@@ -832,25 +812,19 @@ export function StyledDashboard() {
                     <CompanyInfo>
                       <SectorIcon>{getSectorIcon(company.sector)}</SectorIcon>
                       <CompanyDetails>
-                        <CompanyTicker>{company.formattedTicker || company.ticker}</CompanyTicker>
-                        <CompanySector>{company.sector}</CompanySector>
+                        <CompanyTicker>{company.company}</CompanyTicker>
+                        <CompanySector>{company.formattedTicker || company.ticker}</CompanySector>
                       </CompanyDetails>
                     </CompanyInfo>
                     <SelectionIndicator isSelected={isSelected} />
                   </CompanyHeader>
 
-                  <CompanyName>{company.company}</CompanyName>
-
                   <PriceSection>
                     <PriceHeader>
-                      <div>
+                      <div style={{ textAlign: 'center', width: '100%' }}>
                         <Price>{SecureGoogleSheetsService.safeCurrency(company.currentPriceEur)}</Price>
                         <PriceLabel>Current Price</PriceLabel>
                       </div>
-                      <ChangeBadge isPositive={isPositive}>
-                        {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {isPositive ? '+' : ''}{mockChange.changePercent.toFixed(2)}%
-                      </ChangeBadge>
                     </PriceHeader>
                   </PriceSection>
 
@@ -1023,35 +997,18 @@ export function StyledDashboard() {
                       .sort((a, b) => b.marketCapEur - a.marketCapEur)
                       .slice(0, 10)
                       .map(company => {
-                        const mockChange = SecureGoogleSheetsService.calculateMockChange();
                         return (
                           <MetricCard key={company.ticker} color="#3b82f6">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                              <span style={{ width: 80, fontSize: 14, fontWeight: 500 }}>
+                              <span style={{ width: 100, fontSize: 14, fontWeight: 500 }}>
                                 {company.formattedTicker || company.ticker}
                               </span>
-                              <div style={{ 
-                                flex: 1, 
-                                height: 24, 
-                                background: '#f3f4f6', 
-                                borderRadius: 12, 
-                                overflow: 'hidden',
-                                position: 'relative'
-                              }}>
-                                <div
-                                  style={{
-                                    height: '100%',
-                                    width: `${Math.abs(mockChange.changePercent) * 10}%`,
-                                    background: mockChange.changePercent >= 0 ? 
-                                      'linear-gradient(135deg, #10b981, #059669)' : 
-                                      'linear-gradient(135deg, #ef4444, #dc2626)',
-                                    transition: 'width 0.3s ease'
-                                  }}
-                                />
-                              </div>
-                              <ChangeBadge isPositive={mockChange.changePercent >= 0}>
-                                {mockChange.changePercent >= 0 ? '+' : ''}{mockChange.changePercent.toFixed(2)}%
-                              </ChangeBadge>
+                              <span style={{ flex: 1, fontSize: 14, color: '#4b5563' }}>
+                                {company.company}
+                              </span>
+                              <span style={{ fontSize: 14, fontWeight: 600, color: '#3b82f6' }}>
+                                {SecureGoogleSheetsService.safeCurrency(company.currentPriceEur)}
+                              </span>
                             </div>
                           </MetricCard>
                         );

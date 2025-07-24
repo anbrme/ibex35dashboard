@@ -62,13 +62,6 @@ const formatVolume = (volume: number): string => {
 };
 
 export function ModernCompanyCard({ company, isSelected, onToggle }: Props) {
-  // Debug: Log what we're actually receiving
-  console.log('ModernCompanyCard received:', { 
-    company: company.company, 
-    ticker: company.ticker,
-    allFields: Object.keys(company)
-  });
-
   return (
     <div
       onClick={onToggle}
