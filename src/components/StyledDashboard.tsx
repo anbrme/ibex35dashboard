@@ -277,12 +277,41 @@ const SelectionIndicator = styled.div.withConfig({
   }
 `;
 
-const CompanyName = styled.h4`
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 16px 0;
-  line-height: 1.4;
+const ExpandToggle = styled.div`
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  
+  &:hover {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.2);
+  }
+`;
+
+const CollapsibleContent = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isExpanded'
+})<{ isExpanded: boolean }>`
+  overflow: hidden;
+  transition: all 0.3s ease;
+  
+  ${props => props.isExpanded ? `
+    max-height: 1000px;
+    opacity: 1;
+    margin-top: 8px;
+  ` : `
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+  `}
 `;
 
 const PriceSection = styled.div`
@@ -633,6 +662,7 @@ const formatChangePercent = (percent: number | null | undefined): string => {
 export function StyledDashboard() {
   const [companies, setCompanies] = useState<SecureIBEXCompanyData[]>([]);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(new Set());
+  const [expandedCompanyIds, setExpandedCompanyIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'network' | 'sectors' | 'performance' | 'directors'>('network');
   const [loading, setLoading] = useState(true);
@@ -680,6 +710,24 @@ export function StyledDashboard() {
   
   const toggleCompanySelection = useCallback((companyId: string) => {
     setSelectedCompanyIds(prev => {
+      const next = new Set(prev);
+      if (next.has(companyId)) {
+        next.delete(companyId);
+      } else {
+        next.add(companyId);
+        // Auto-expand when selected
+        setExpandedCompanyIds(expandedPrev => {
+          const expandedNext = new Set(expandedPrev);
+          expandedNext.add(companyId);
+          return expandedNext;
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleCompanyExpansion = useCallback((companyId: string) => {
+    setExpandedCompanyIds(prev => {
       const next = new Set(prev);
       if (next.has(companyId)) {
         next.delete(companyId);
@@ -819,6 +867,7 @@ export function StyledDashboard() {
           <CompanyList>
             {filteredCompanies.map((company) => {
               const isSelected = selectedCompanyIds.has(company.ticker);
+              const isExpanded = expandedCompanyIds.has(company.ticker);
               
               return (
                 <CompanyCard
@@ -837,6 +886,15 @@ export function StyledDashboard() {
                     <SelectionIndicator isSelected={isSelected} />
                   </CompanyHeader>
 
+                  <ExpandToggle 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleCompanyExpansion(company.ticker);
+                    }}
+                  >
+                    {isExpanded ? '▲ Hide Details' : '▼ Show Details'}
+                  </ExpandToggle>
+
                   <PriceSection>
                     <PriceHeader>
                       <div style={{ textAlign: 'center', width: '100%' }}>
@@ -845,6 +903,8 @@ export function StyledDashboard() {
                       </div>
                     </PriceHeader>
                   </PriceSection>
+
+                  <CollapsibleContent isExpanded={isExpanded}>
 
                   <MetricsGrid>
                     <MetricCard color="#3b82f6">
@@ -928,6 +988,7 @@ export function StyledDashboard() {
                       </DirectorsPreview>
                     )}
                   </DirectorsSection>
+                  </CollapsibleContent>
                 </CompanyCard>
               );
             })}
