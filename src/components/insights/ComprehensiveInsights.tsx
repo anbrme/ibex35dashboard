@@ -184,7 +184,7 @@ const COMPANY_COLORS = [
 ];
 
 // Function to get consistent color for a company
-const getCompanyColor = (ticker: string, selectedCompanies: SecureIBEXCompanyData[], selectedCompanyIds: Set<string>): string => {
+const getCompanyColor = (ticker: string, selectedCompanyIds: Set<string>): string => {
   console.log('🎨 getCompanyColor called:', { 
     ticker, 
     selectedCompanyIdsSize: selectedCompanyIds.size, 
@@ -259,24 +259,39 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
 
   // PE Ratio Distribution
   const peDistribution = useMemo(() => {
-    const ranges = [
-      { range: '0-10', min: 0, max: 10, count: 0 },
-      { range: '10-15', min: 10, max: 15, count: 0 },
-      { range: '15-20', min: 15, max: 20, count: 0 },
-      { range: '20-25', min: 20, max: 25, count: 0 },
-      { range: '25+', min: 25, max: Infinity, count: 0 }
-    ];
+    if (selectedCompanyIds.size > 1) {
+      // Show individual companies when multiple selected
+      return filteredCompanies
+        .filter(c => c.peRatio)
+        .sort((a, b) => (a.peRatio || 0) - (b.peRatio || 0))
+        .map(company => ({
+          range: company.company.length > 8 ? company.company.substring(0, 8) + '...' : company.company,
+          count: company.peRatio || 0,
+          ticker: company.ticker,
+          fullName: company.company,
+          color: getCompanyColor(company.ticker, selectedCompanyIds)
+        }));
+    } else {
+      // Show grouped ranges for single/no selection
+      const ranges = [
+        { range: '0-10', min: 0, max: 10, count: 0 },
+        { range: '10-15', min: 10, max: 15, count: 0 },
+        { range: '15-20', min: 15, max: 20, count: 0 },
+        { range: '20-25', min: 20, max: 25, count: 0 },
+        { range: '25+', min: 25, max: Infinity, count: 0 }
+      ];
 
-    filteredCompanies.forEach(company => {
-      const pe = company.peRatio;
-      if (pe) {
-        const range = ranges.find(r => pe >= r.min && pe < r.max);
-        if (range) range.count++;
-      }
-    });
+      filteredCompanies.forEach(company => {
+        const pe = company.peRatio;
+        if (pe) {
+          const range = ranges.find(r => pe >= r.min && pe < r.max);
+          if (range) range.count++;
+        }
+      });
 
-    return ranges.filter(r => r.count > 0);
-  }, [filteredCompanies]);
+      return ranges.filter(r => r.count > 0);
+    }
+  }, [filteredCompanies, selectedCompanyIds]);
 
   // 52-Week Range Analysis
   const priceRangeData = useMemo(() => {
@@ -287,7 +302,7 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
       .map(company => {
         const range = (company.high52! - company.low52!);
         const position = ((company.currentPriceEur - company.low52!) / range) * 100;
-        const color = getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds);
+        const color = getCompanyColor(company.ticker, selectedCompanyIds);
         
         console.log('📊 Processing company for priceRangeData:', { 
           ticker: company.ticker, 
@@ -322,7 +337,7 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
         name: company.company,
         ticker: company.ticker,
         turnover: ((company.volumeEur || 0) / (company.marketCapEur || 1)) * 100, // Turnover rate
-        color: getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)
+        color: getCompanyColor(company.ticker, selectedCompanyIds)
       }));
   }, [filteredCompanies, selectedCompanyIds]);
 
@@ -411,15 +426,49 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
         <ChartCard>
           <ChartTitle>
             <TrendingUp size={20} color={COLORS.primary} />
-            P/E Ratio Distribution
+            {selectedCompanyIds.size > 1 ? 'P/E Ratio by Company' : 'P/E Ratio Distribution'}
           </ChartTitle>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={peDistribution}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
-              <XAxis dataKey="range" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="count" fill={COLORS.primary} radius={[4, 4, 0, 0]} />
+              <XAxis dataKey="range" angle={selectedCompanyIds.size > 1 ? -45 : 0} textAnchor={selectedCompanyIds.size > 1 ? "end" : "middle"} height={selectedCompanyIds.size > 1 ? 80 : 60} />
+              <YAxis tickFormatter={(value) => selectedCompanyIds.size > 1 ? `${value}` : value} />
+              <Tooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        padding: '12px',
+                        border: '1px solid rgba(0, 0, 0, 0.1)',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+                      }}>
+                        <p style={{ margin: 0, fontWeight: 600, color: '#1f2937' }}>
+                          {selectedCompanyIds.size > 1 ? (data.fullName || label) : label}
+                        </p>
+                        {selectedCompanyIds.size > 1 && data.ticker && (
+                          <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6b7280' }}>({data.ticker})</p>
+                        )}
+                        <p style={{ margin: '4px 0 0 0', color: '#374151' }}>
+                          {selectedCompanyIds.size > 1 ? `P/E Ratio: ${payload[0].value}` : `Companies: ${payload[0].value}`}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              {selectedCompanyIds.size > 1 ? (
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {peDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color || COLORS.primary} />
+                  ))}
+                </Bar>
+              ) : (
+                <Bar dataKey="count" fill={COLORS.primary} radius={[4, 4, 0, 0]} />
+              )}
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -435,10 +484,32 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
               <XAxis type="number" dataKey="x" name="Volume (M€)" />
               <YAxis type="number" dataKey="y" name="Market Cap (B€)" />
               <Tooltip 
-                formatter={(value, name) => [
-                  name === 'x' ? `€${value}M` : `€${value}B`,
-                  name === 'x' ? 'Volume' : 'Market Cap'
-                ]}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        padding: '12px',
+                        border: '1px solid rgba(0, 0, 0, 0.1)',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+                      }}>
+                        <p style={{ margin: 0, fontWeight: 600, color: '#1f2937' }}>{data.name}</p>
+                        <p style={{ margin: '4px 0 0 0', color: '#374151' }}>
+                          Volume: €{data.x?.toFixed(1)}M
+                        </p>
+                        <p style={{ margin: '2px 0 0 0', color: '#374151' }}>
+                          Market Cap: €{data.y?.toFixed(1)}B
+                        </p>
+                        <p style={{ margin: '2px 0 0 0', color: '#6b7280' }}>
+                          Turnover: {data.turnover?.toFixed(2)}%
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
               />
               {selectedCompanyIds.size > 1 ? (
                 <Scatter name="Companies" dataKey="y">
@@ -471,9 +542,33 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
               <YAxis yAxisId="price" orientation="left" tickFormatter={(value) => `€${value}`} />
               <YAxis yAxisId="position" orientation="right" tickFormatter={(value) => `${value}%`} />
               <Tooltip 
-                formatter={(value, name) => {
-                  if (name === 'position') return [`${Number(value).toFixed(1)}%`, 'Position in Range'];
-                  return [`€${Number(value).toFixed(2)}`, name === 'high' ? '52W High' : name === 'low' ? '52W Low' : 'Current'];
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const data = priceRangeData.find(d => d.name === label);
+                    return (
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        padding: '12px',
+                        border: '1px solid rgba(0, 0, 0, 0.1)',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+                      }}>
+                        <p style={{ margin: 0, fontWeight: 600, color: '#1f2937' }}>{label}</p>
+                        {data && (
+                          <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6b7280' }}>({data.ticker})</p>
+                        )}
+                        {payload.map((entry, index) => (
+                          <p key={index} style={{ margin: '4px 0 0 0', color: '#374151' }}>
+                            {entry.name === 'position' 
+                              ? `Position: ${Number(entry.value).toFixed(1)}%`
+                              : `${entry.name === 'high' ? '52W High' : entry.name === 'low' ? '52W Low' : 'Current'}: €${Number(entry.value).toFixed(2)}`
+                            }
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return null;
                 }}
               />
               {(() => {
@@ -540,7 +635,7 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
                   ticker: c.ticker,
                   eps: c.eps || 0,
                   pe: c.peRatio || 0,
-                  color: getCompanyColor(c.ticker, filteredCompanies, selectedCompanyIds)
+                  color: getCompanyColor(c.ticker, selectedCompanyIds)
                 }))
               }
             >
@@ -548,7 +643,32 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
               <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
               <YAxis yAxisId="eps" orientation="left" tickFormatter={(value) => `€${value}`} />
               <YAxis yAxisId="pe" orientation="right" />
-              <Tooltip />
+              <Tooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        padding: '12px',
+                        border: '1px solid rgba(0, 0, 0, 0.1)',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+                      }}>
+                        <p style={{ margin: 0, fontWeight: 600, color: '#1f2937' }}>{label}</p>
+                        {payload.map((entry, index) => (
+                          <p key={index} style={{ margin: '4px 0 0 0', color: '#374151' }}>
+                            {entry.dataKey === 'eps' 
+                              ? `EPS: €${Number(entry.value).toFixed(2)}`
+                              : `P/E Ratio: ${Number(entry.value).toFixed(1)}`
+                            }
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
               {selectedCompanyIds.size > 1 ? (
                 <>
                   <Bar yAxisId="eps" dataKey="eps" radius={[4, 4, 0, 0]}>
@@ -557,7 +677,7 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
                       .sort((a, b) => (b.eps || 0) - (a.eps || 0))
                       .slice(0, 12)
                       .map((company, index) => (
-                        <Cell key={`cell-${index}`} fill={getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)} />
+                        <Cell key={`cell-${index}`} fill={getCompanyColor(company.ticker, selectedCompanyIds)} />
                       ))
                     }
                   </Bar>
@@ -567,7 +687,7 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
                       .sort((a, b) => (b.eps || 0) - (a.eps || 0))
                       .slice(0, 12)
                       .map((company, index) => (
-                        <Cell key={`cell-line-${index}`} stroke={getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)} />
+                        <Cell key={`cell-line-${index}`} stroke={getCompanyColor(company.ticker, selectedCompanyIds)} />
                       ))
                     }
                   </Line>
