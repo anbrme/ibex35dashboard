@@ -1,8 +1,8 @@
-import { ShadcnDashboard } from './components/ShadcnDashboard';
+import { StyledDashboard } from './components/StyledDashboard';
 import './index.css';
 
 function App() {
-  return <ShadcnDashboard />;
+  return <StyledDashboard />;
 }
 
 export default App;
