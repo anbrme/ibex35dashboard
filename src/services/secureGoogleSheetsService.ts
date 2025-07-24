@@ -16,6 +16,8 @@ export interface SecureIBEXCompanyData {
   currentPriceEur: number;
   marketCapEur: number;
   volumeEur: number;
+  changePercent?: number;
+  priceChange?: number;
   directors: Director[];
 }
 
@@ -56,9 +58,28 @@ export class SecureGoogleSheetsService {
         throw new Error(result.error || 'Unknown API error');
       }
 
-      const companies = result.data || [];
-      console.log(`✅ Successfully loaded ${companies.length} companies from secure backend`);
+      const rawCompanies = result.data || [];
+      console.log(`✅ Successfully loaded ${rawCompanies.length} companies from secure backend`);
       console.log(`📊 Last updated: ${result.lastUpdated}`);
+      
+      // Transform API response to match frontend interface
+      const companies: SecureIBEXCompanyData[] = rawCompanies.map((rawCompany: any) => ({
+        ticker: rawCompany.ticker,
+        company: rawCompany.name || rawCompany.company, // Map 'name' to 'company'
+        sector: rawCompany.sector,
+        formattedTicker: rawCompany.formattedTicker,
+        currentPriceEur: rawCompany.current_price_eur || rawCompany.currentPriceEur || 0,
+        marketCapEur: rawCompany.market_cap_eur || rawCompany.marketCapEur || 0,
+        volumeEur: rawCompany.volume || rawCompany.volumeEur || 0,
+        changePercent: rawCompany.change_percent || rawCompany.changePercent || 0,
+        priceChange: rawCompany.price_change || rawCompany.priceChange || 0,
+        directors: (rawCompany.directors || []).map((director: any) => ({
+          name: director.name,
+          position: director.position,
+          appointmentDate: director.appointedDate || director.appointmentDate || '',
+          bioUrl: director.bio || director.bioUrl || ''
+        }))
+      }));
       
       return companies;
       

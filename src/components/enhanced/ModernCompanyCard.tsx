@@ -1,5 +1,4 @@
-import { useMemo } from 'react';
-import { TrendingUp, TrendingDown, Users, Zap, BarChart3 } from 'lucide-react';
+import { Users, Zap, BarChart3 } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 
 interface Props {
@@ -63,8 +62,12 @@ const formatVolume = (volume: number): string => {
 };
 
 export function ModernCompanyCard({ company, isSelected, onToggle }: Props) {
-  const mockChange = useMemo(() => SecureGoogleSheetsService.calculateMockChange(), []);
-  const isPositive = mockChange.changePercent >= 0;
+  // Debug: Log what we're actually receiving
+  console.log('ModernCompanyCard received:', { 
+    company: company.company, 
+    ticker: company.ticker,
+    allFields: Object.keys(company)
+  });
 
   return (
     <div
@@ -89,7 +92,7 @@ export function ModernCompanyCard({ company, isSelected, onToggle }: Props) {
               </div>
               <div>
                 <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
-                  {company.formattedTicker || company.ticker}
+                  {company.company}
                 </h3>
                 <p className="text-sm text-gray-600 font-medium">{company.sector}</p>
               </div>
@@ -105,34 +108,18 @@ export function ModernCompanyCard({ company, isSelected, onToggle }: Props) {
             </div>
           </div>
 
-          {/* Company Name */}
+          {/* Company Ticker */}
           <h4 className="text-lg font-semibold text-gray-800 mb-4 line-clamp-2">
-            {company.company}
+            {company.formattedTicker || company.ticker}
           </h4>
 
           {/* Price Section */}
           <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-lg p-4 mb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold text-gray-900">
-                  {SecureGoogleSheetsService.safeCurrency(company.currentPriceEur)}
-                </p>
-                <p className="text-sm text-gray-600">Current Price</p>
-              </div>
-              <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${
-                isPositive 
-                  ? 'bg-green-100 text-green-700' 
-                  : 'bg-red-100 text-red-700'
-              }`}>
-                {isPositive ? (
-                  <TrendingUp className="w-4 h-4" />
-                ) : (
-                  <TrendingDown className="w-4 h-4" />
-                )}
-                <span className="font-semibold text-sm">
-                  {isPositive ? '+' : ''}{mockChange.changePercent.toFixed(2)}%
-                </span>
-              </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900">
+                {SecureGoogleSheetsService.safeCurrency(company.currentPriceEur)}
+              </p>
+              <p className="text-sm text-gray-600">Current Price</p>
             </div>
           </div>
 
