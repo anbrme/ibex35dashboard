@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import styled from 'styled-components';
-import { RotateCcw, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus } from 'lucide-react';
 import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 
 interface Props {
@@ -11,19 +11,29 @@ interface Props {
   height?: number;
 }
 
-const Container = styled.div`
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 16px;
+const Container = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isFullscreen'
+})<{ isFullscreen: boolean }>`
+  position: ${props => props.isFullscreen ? 'fixed' : 'relative'};
+  top: ${props => props.isFullscreen ? '0' : 'auto'};
+  left: ${props => props.isFullscreen ? '0' : 'auto'};
+  width: ${props => props.isFullscreen ? '100vw' : '100%'};
+  height: ${props => props.isFullscreen ? '100vh' : '100%'};
+  z-index: ${props => props.isFullscreen ? '9999' : 'auto'};
+  border-radius: ${props => props.isFullscreen ? '0' : '16px'};
   overflow: hidden;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: ${props => props.isFullscreen 
+    ? '0 0 50px rgba(0, 0, 0, 0.3)' 
+    : 'inset 0 2px 8px rgba(0, 0, 0, 0.1)'};
+  transition: all 0.3s ease;
 `;
 
 const GraphContainer = styled.div`
   width: 100%;
   height: 100%;
+  min-height: 400px;
+  position: relative;
 `;
 
 const Controls = styled.div`
@@ -136,6 +146,7 @@ const LegendDot = styled.div<{ color: string; size?: number }>`
 export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; visible: boolean }>({
     x: 0, y: 0, text: '', visible: false
   });
@@ -146,13 +157,25 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     // Filter relevant companies with null safety
     const relevantCompanies = selectedCompanyIds.size > 0 
       ? companies.filter(c => c && c.ticker && selectedCompanyIds.has(c.ticker))
-      : companies.filter(c => c && c.ticker).slice(0, 8); // Show top 8 if none selected
+      : []; // Show nothing if no companies are selected
 
-    if (relevantCompanies.length === 0) return;
+    if (relevantCompanies.length === 0) {
+      // Clear the graph if no companies selected
+      if (cyRef.current) {
+        cyRef.current.destroy();
+        cyRef.current = null;
+      }
+      return;
+    }
 
     // Prepare graph data
     const elements: ElementDefinition[] = [];
     let hasValidElements = false;
+
+    // Calculate node sizes based on number of companies
+    const numCompanies = relevantCompanies.length;
+    const companySize = Math.max(30, Math.min(60, 200 / Math.sqrt(numCompanies)));
+    const directorSize = Math.max(20, Math.min(40, 150 / Math.sqrt(numCompanies)));
 
     // Add company nodes
     relevantCompanies.forEach(company => {
@@ -163,7 +186,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             label: company.formattedTicker || company.ticker,
             type: 'company',
             company: company,
-            size: 60,
+            size: companySize,
             color: selectedCompanyIds.has(company.ticker) ? '#3b82f6' : '#6366f1'
           }
         });
@@ -171,7 +194,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       }
 
       // Add director nodes (with null safety)
-      if (company.directors && Array.isArray(company.directors)) {
+      if (company.directors && Array.isArray(company.directors) && company.directors.length > 0) {
         company.directors.forEach((director, idx) => {
           if (director && director.name) {
             const directorId = `dir_${company.ticker}_${idx}`;
@@ -182,7 +205,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
                 type: 'director',
                 director: director,
                 company: company,
-                size: 40,
+                size: directorSize,
                 color: '#8b5cf6'
               }
             });
@@ -198,6 +221,30 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             });
           }
         });
+      } else {
+        // Add a placeholder director node if no directors exist
+        const placeholderDirectorId = `dir_${company.ticker}_placeholder`;
+        elements.push({
+          data: {
+            id: placeholderDirectorId,
+            label: 'Board Info',
+            type: 'director',
+            director: { name: 'Board Information', position: 'Placeholder', appointmentDate: '', bioUrl: '' },
+            company: company,
+            size: directorSize * 0.8,
+            color: '#9ca3af'
+          }
+        });
+
+        // Add edge between company and placeholder director
+        elements.push({
+          data: {
+            id: `edge_${company.ticker}_${placeholderDirectorId}`,
+            source: company.ticker,
+            target: placeholderDirectorId,
+            type: 'board_member'
+          }
+        });
       }
     });
 
@@ -206,6 +253,13 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       console.warn('No valid elements for Cytoscape graph');
       return;
     }
+
+    console.log(`🔍 Cytoscape initializing with ${elements.length} elements:`, elements.map(e => ({ id: e.data.id, type: e.data.type })));
+
+    // Adjust layout parameters based on graph complexity
+    const totalNodes = elements.filter(e => !e.data.source).length;
+    const idealEdgeLength = Math.max(20, Math.min(50, 300 / Math.sqrt(totalNodes)));
+    const nodeRepulsion = Math.max(1000, Math.min(4000, 8000 / Math.sqrt(totalNodes)));
 
     // Initialize Cytoscape with error handling
     let cy;
@@ -305,13 +359,23 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         }
       ],
       layout: {
-        name: 'grid',
-        animate: false,
+        name: 'cose',
+        animate: true,
+        animationDuration: 1500,
         fit: true,
-        padding: 30,
-        rows: undefined,
-        cols: undefined,
-        spacingFactor: 1.2
+        padding: 50,
+        componentSpacing: 40,
+        nodeOverlap: 4,
+        idealEdgeLength: idealEdgeLength,
+        edgeElasticity: 16,
+        nestingFactor: 1.2,
+        gravity: Math.min(1, 2 / Math.sqrt(totalNodes)),
+        numIter: Math.min(1000, Math.max(500, totalNodes * 2)),
+        initialTemp: 1000,
+        coolingFactor: 0.99,
+        minTemp: 1.0,
+        nodeRepulsion: nodeRepulsion,
+        randomize: false
       },
       zoom: 1,
       pan: { x: 0, y: 0 },
@@ -337,9 +401,11 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     // Wait for layout to complete before adjusting view
     cy.ready(() => {
       try {
+        console.log('🎯 Cytoscape ready, adjusting view...');
         if (cy && !cy.destroyed()) {
           cy.fit();
           cy.center();
+          console.log('✅ Cytoscape view adjusted successfully');
         }
       } catch (error) {
         console.warn('Cytoscape ready callback failed:', error);
@@ -361,14 +427,21 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       }
       
       let tooltipText = '';
+      console.log('🔍 Tooltip data:', data); // Debug log
       if (data.type === 'company') {
-        const directorsCount = data.company.directors && Array.isArray(data.company.directors) ? data.company.directors.length : 0;
-        const marketCap = data.company.marketCapEur || 0;
-        tooltipText = `${data.company.company || 'Unknown Company'}\n${data.company.sector || 'Unknown Sector'}\n${directorsCount} directors\nMarket Cap: €${(marketCap / 1e9).toFixed(1)}B`;
+        const company = data.company;
+        const directorsCount = company?.directors && Array.isArray(company.directors) ? company.directors.length : 0;
+        const marketCap = company?.marketCapEur || 0;
+        const companyName = company?.company || company?.name || data.label || 'Unknown Company';
+        const sector = company?.sector || 'Unknown Sector';
+        tooltipText = `${companyName}\n${sector}\n${directorsCount} directors\nMarket Cap: €${(marketCap / 1e9).toFixed(1)}B`;
       } else if (data.director) {
-        tooltipText = `${data.director.name || 'Unknown Director'}\n${data.director.position || 'Director'}\n${data.company.company || 'Unknown Company'}`;
-        if (data.director.appointmentDate) {
-          tooltipText += `\nSince: ${data.director.appointmentDate}`;
+        const director = data.director;
+        const company = data.company;
+        const companyName = company?.company || company?.name || 'Unknown Company';
+        tooltipText = `${director.name || 'Unknown Director'}\n${director.position || 'Director'}\n${companyName}`;
+        if (director.appointmentDate) {
+          tooltipText += `\nSince: ${director.appointmentDate}`;
         }
       }
       
@@ -457,8 +530,39 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     }
   };
 
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+    // Resize cytoscape after fullscreen toggle
+    setTimeout(() => {
+      if (cyRef.current) {
+        cyRef.current.resize();
+        cyRef.current.fit();
+      }
+    }, 300);
+  };
+
+  // Add keyboard support for fullscreen
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+        setTimeout(() => {
+          if (cyRef.current) {
+            cyRef.current.resize();
+            cyRef.current.fit();
+          }
+        }, 300);
+      }
+    };
+
+    if (isFullscreen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isFullscreen]);
+
   return (
-    <Container>
+    <Container isFullscreen={isFullscreen}>
       <GraphContainer ref={containerRef} />
       
       <Controls>
@@ -469,10 +573,13 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
           <ZoomOut size={16} />
         </ControlButton>
         <ControlButton onClick={handleFit} title="Fit to Screen">
-          <Maximize2 size={16} />
+          <Focus size={16} />
         </ControlButton>
         <ControlButton onClick={handleReset} title="Reset View">
           <RotateCcw size={16} />
+        </ControlButton>
+        <ControlButton onClick={toggleFullscreen} title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}>
+          {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </ControlButton>
       </Controls>
       

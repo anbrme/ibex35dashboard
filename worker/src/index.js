@@ -501,6 +501,19 @@ function transformSheetsData(companiesData, directorsData) {
           company.company.split(' ')[0] // First word only
         ];
         
+        // Add specific mappings for known mismatches
+        const specificMappings = {
+          'Aena': ['ENAIRE', 'AENA'],
+          'AENA': ['ENAIRE', 'Aena'],
+          'Banco Santander': ['Santander'],
+          'Banco Bilbao Vizcaya Argentaria': ['BBVA'],
+          'Telefónica': ['Telefonica']
+        };
+        
+        if (specificMappings[company.company]) {
+          companyNameVariations.push(...specificMappings[company.company]);
+        }
+        
         console.log(`🔍 Trying to match company "${company.company}" with variations:`, companyNameVariations);
         
         // Also try reverse matching - check if company name appears in director company names
