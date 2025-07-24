@@ -684,6 +684,11 @@ export function StyledDashboard() {
     setSelectedCompanyIds(new Set());
   }, []);
   
+  const selectAllCompanies = useCallback(() => {
+    const allTickers = new Set(filteredCompanies.map(company => company.ticker));
+    setSelectedCompanyIds(allTickers);
+  }, [filteredCompanies]);
+  
   const metrics = useMemo(() => {
     const selected = selectedCompanyIds.size > 0 
       ? companies.filter(c => selectedCompanyIds.has(c.ticker))
@@ -782,14 +787,23 @@ export function StyledDashboard() {
               />
             </SearchWrapper>
             
-            {selectedCompanyIds.size > 0 && (
-              <SelectionInfo>
-                <span>{selectedCompanyIds.size} companies selected</span>
-                <Button variant="secondary" onClick={clearSelection}>
-                  Clear all
-                </Button>
-              </SelectionInfo>
-            )}
+            <SelectionInfo>
+              {selectedCompanyIds.size > 0 ? (
+                <>
+                  <span>{selectedCompanyIds.size} companies selected</span>
+                  <Button variant="secondary" onClick={clearSelection}>
+                    Clear all
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span>{filteredCompanies.length} companies available</span>
+                  <Button variant="primary" onClick={selectAllCompanies}>
+                    Select all
+                  </Button>
+                </>
+              )}
+            </SelectionInfo>
           </Header>
           
           <CompanyList>
