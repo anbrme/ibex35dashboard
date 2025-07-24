@@ -1064,7 +1064,7 @@ export function StyledDashboard() {
                   <ViewTab
                     key={tab.id}
                     isActive={isActive}
-                    onClick={() => setActiveView(tab.id as any)}
+                    onClick={() => setActiveView(tab.id as 'network' | 'sectors' | 'performance' | 'directors' | 'insights')}
                   >
                     <IconComponent size={20} />
                     <TabInfo>

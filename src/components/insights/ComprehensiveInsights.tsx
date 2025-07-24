@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import styled from 'styled-components';
 import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ComposedChart } from 'recharts';
 import { TrendingUp, DollarSign, BarChart3, Users, Briefcase, MessageSquare, Target, Activity, ArrowUp } from 'lucide-react';
-import type { SecureIBEXCompanyData } from './../../services/secureGoogleSheetsService';
+import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 
 interface ComprehensiveInsightsProps {
   companies: SecureIBEXCompanyData[];
