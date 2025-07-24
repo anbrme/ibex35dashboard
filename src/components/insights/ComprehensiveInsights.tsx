@@ -185,7 +185,14 @@ const COMPANY_COLORS = [
 
 // Function to get consistent color for a company
 const getCompanyColor = (ticker: string, selectedCompanies: SecureIBEXCompanyData[], selectedCompanyIds: Set<string>): string => {
+  console.log('🎨 getCompanyColor called:', { 
+    ticker, 
+    selectedCompanyIdsSize: selectedCompanyIds.size, 
+    selectedCompanyIds: Array.from(selectedCompanyIds) 
+  });
+  
   if (selectedCompanyIds.size <= 1) {
+    console.log('🎨 Using default color for single/no selection');
     // Single company or none selected - use default colors
     return COLORS.primary;
   }
@@ -193,7 +200,16 @@ const getCompanyColor = (ticker: string, selectedCompanies: SecureIBEXCompanyDat
   // Multiple companies selected - use consistent company-based colors
   const sortedTickers = Array.from(selectedCompanyIds).sort();
   const index = sortedTickers.indexOf(ticker);
-  return COMPANY_COLORS[index % COMPANY_COLORS.length];
+  const color = COMPANY_COLORS[index % COMPANY_COLORS.length];
+  
+  console.log('🎨 Using company color:', { 
+    ticker, 
+    sortedTickers, 
+    index, 
+    color 
+  });
+  
+  return color;
 };
 
 const formatCurrency = (value: number | null | undefined): string => {
@@ -264,11 +280,20 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
 
   // 52-Week Range Analysis
   const priceRangeData = useMemo(() => {
-    return filteredCompanies
+    console.log('📊 Generating priceRangeData, selectedCompanyIds:', Array.from(selectedCompanyIds));
+    
+    const data = filteredCompanies
       .filter(c => c.high52 && c.low52 && c.currentPriceEur)
       .map(company => {
         const range = (company.high52! - company.low52!);
         const position = ((company.currentPriceEur - company.low52!) / range) * 100;
+        const color = getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds);
+        
+        console.log('📊 Processing company for priceRangeData:', { 
+          ticker: company.ticker, 
+          color 
+        });
+        
         return {
           name: company.company.length > 10 ? company.company.substring(0, 10) + '...' : company.company,
           ticker: company.ticker,
@@ -277,11 +302,14 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
           current: company.currentPriceEur,
           position,
           range,
-          color: getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)
+          color
         };
       })
       .sort((a, b) => b.position - a.position)
       .slice(0, 15);
+      
+    console.log('📊 Final priceRangeData:', data);
+    return data;
   }, [filteredCompanies, selectedCompanyIds]);
 
   // Volume vs Market Cap Analysis
@@ -448,12 +476,19 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
                   return [`€${Number(value).toFixed(2)}`, name === 'high' ? '52W High' : name === 'low' ? '52W Low' : 'Current'];
                 }}
               />
-              {selectedCompanyIds.size > 1 ? (
+              {(() => {
+                console.log('🎨 Chart rendering condition check:', { 
+                  selectedCompanyIdsSize: selectedCompanyIds.size, 
+                  isMultiple: selectedCompanyIds.size > 1 
+                });
+                return selectedCompanyIds.size > 1;
+              })() ? (
                 <>
                   <Bar yAxisId="position" dataKey="position" opacity={0.3}>
-                    {priceRangeData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
+                    {priceRangeData.map((entry, index) => {
+                      console.log('🎨 Rendering Bar Cell:', { index, ticker: entry.ticker, color: entry.color });
+                      return <Cell key={`cell-${index}`} fill={entry.color} />;
+                    })}
                   </Bar>
                   <Line yAxisId="price" type="monotone" dataKey="high" strokeWidth={2}>
                     {priceRangeData.map((entry, index) => (
