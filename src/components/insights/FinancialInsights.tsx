@@ -151,6 +151,30 @@ const Ticker = styled.span`
   color: #3b82f6;
 `;
 
+const ColorLegend = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+`;
+
+const LegendItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+`;
+
+const ColorDot = styled.div<{ color: string }>`
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: ${props => props.color};
+`;
+
 // Sector colors for consistency
 const SECTOR_COLORS = {
   'Financial Services': '#3b82f6',
@@ -164,6 +188,14 @@ const SECTOR_COLORS = {
   'Infrastructure': '#14b8a6',
   'Others': '#9ca3af'
 };
+
+// Company-specific colors for multi-selection
+const COMPANY_COLORS = [
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
+  '#06b6d4', '#f97316', '#ec4899', '#6366f1', '#14b8a6',
+  '#84cc16', '#f43f5e', '#a855f7', '#0ea5e9', '#22c55e',
+  '#fb923c', '#e11d48', '#7c3aed', '#0284c7', '#16a34a'
+];
 
 const formatCurrency = (value: number | null | undefined): string => {
   if (!value) return '€0';
@@ -209,26 +241,38 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
   const scatterData = useMemo(() => {
     return filteredCompanies
       .filter(c => c.marketCapEur && c.changePercent !== null)
-      .map(company => ({
+      .map((company, index) => ({
         x: company.changePercent || 0,
         y: (company.marketCapEur || 0) / 1e9, // Convert to billions
         name: company.company,
+        ticker: company.ticker,
         sector: company.sector || 'Others',
-        color: SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
+        marketCap: company.marketCapEur || 0,
+        changePercent: company.changePercent || 0,
+        currentPrice: company.currentPriceEur,
+        color: selectedCompanyIds.size > 1 
+          ? COMPANY_COLORS[index % COMPANY_COLORS.length]
+          : SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
       }));
-  }, [filteredCompanies]);
+  }, [filteredCompanies, selectedCompanyIds.size]);
 
   const epsData = useMemo(() => {
     return filteredCompanies
       .filter(c => c.eps !== null)
       .sort((a, b) => (b.eps || 0) - (a.eps || 0))
       .slice(0, 10) // Top 10 by EPS
-      .map(company => ({
+      .map((company, index) => ({
         name: company.company.length > 12 ? company.company.substring(0, 12) + '...' : company.company,
+        fullName: company.company,
+        ticker: company.ticker,
         eps: company.eps || 0,
-        color: SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
+        peRatio: company.peRatio || 0,
+        changePercent: company.changePercent || 0,
+        color: selectedCompanyIds.size > 1 
+          ? COMPANY_COLORS[index % COMPANY_COLORS.length]
+          : SECTOR_COLORS[company.sector as keyof typeof SECTOR_COLORS] || SECTOR_COLORS.Others
       }));
-  }, [filteredCompanies]);
+  }, [filteredCompanies, selectedCompanyIds.size]);
 
   const aggregateMetrics = useMemo(() => {
     const validCompanies = filteredCompanies.filter(c => c.marketCapEur);
@@ -244,7 +288,7 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
     };
   }, [filteredCompanies]);
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomScatterTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
@@ -253,14 +297,48 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
           padding: '12px',
           border: '1px solid rgba(0, 0, 0, 0.1)',
           borderRadius: '8px',
-          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+          maxWidth: '200px'
         }}>
-          <p style={{ margin: 0, fontWeight: 600 }}>{data.name}</p>
-          <p style={{ margin: '4px 0 0 0', color: '#6b7280' }}>
-            Market Cap: {formatCurrency(data.y * 1e9)}
+          <p style={{ margin: 0, fontWeight: 600, color: '#1f2937' }}>{data.name}</p>
+          <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6b7280' }}>({data.ticker})</p>
+          <p style={{ margin: '6px 0 2px 0', color: '#374151' }}>
+            Market Cap: {formatCurrency(data.marketCap)}
           </p>
-          <p style={{ margin: '4px 0 0 0', color: '#6b7280' }}>
-            Change: {formatPercent(data.x)}
+          <p style={{ margin: '2px 0', color: data.changePercent >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+            Change: {formatPercent(data.changePercent)}
+          </p>
+          <p style={{ margin: '2px 0 0 0', color: '#6b7280' }}>
+            Current Price: {formatCurrency(data.currentPrice)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomBarTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          padding: '12px',
+          border: '1px solid rgba(0, 0, 0, 0.1)',
+          borderRadius: '8px',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+          maxWidth: '200px'
+        }}>
+          <p style={{ margin: 0, fontWeight: 600, color: '#1f2937' }}>{data.fullName}</p>
+          <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6b7280' }}>({data.ticker})</p>
+          <p style={{ margin: '6px 0 2px 0', color: '#374151' }}>
+            EPS: €{data.eps?.toFixed(2)}
+          </p>
+          <p style={{ margin: '2px 0', color: '#6b7280' }}>
+            P/E Ratio: {data.peRatio?.toFixed(1) || 'N/A'}
+          </p>
+          <p style={{ margin: '2px 0 0 0', color: data.changePercent >= 0 ? '#10b981' : '#ef4444' }}>
+            Change: {formatPercent(data.changePercent)}
           </p>
         </div>
       );
@@ -299,6 +377,19 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
           <MetricLabel>Average EPS</MetricLabel>
         </MetricCard>
       </MetricsRow>
+
+      {selectedCompanyIds.size > 1 && (
+        <ColorLegend>
+          <strong style={{ marginRight: '8px' }}>Selected Companies:</strong>
+          {filteredCompanies.map((company, index) => (
+            <LegendItem key={company.ticker}>
+              <ColorDot color={COMPANY_COLORS[index % COMPANY_COLORS.length]} />
+              <span>{company.company}</span>
+              <Ticker>{company.ticker}</Ticker>
+            </LegendItem>
+          ))}
+        </ColorLegend>
+      )}
 
       <ChartsGrid>
         <ChartCard>
@@ -342,8 +433,19 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
                 name="Market Cap (B€)" 
                 tickFormatter={(value) => `${value}B`}
               />
-              <Tooltip content={<CustomTooltip />} />
-              <Scatter name="Companies" dataKey="y" fill="#3b82f6" />
+              <Tooltip content={<CustomScatterTooltip />} />
+              {selectedCompanyIds.size > 1 ? (
+                scatterData.map((entry) => (
+                  <Scatter
+                    key={entry.ticker}
+                    data={[entry]}
+                    fill={entry.color}
+                    name={entry.name}
+                  />
+                ))
+              ) : (
+                <Scatter name="Companies" dataKey="y" fill="#3b82f6" />
+              )}
             </ScatterChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -356,8 +458,16 @@ export const FinancialInsights: React.FC<FinancialInsightsProps> = ({
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
             <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
             <YAxis tickFormatter={(value) => `€${value}`} />
-            <Tooltip formatter={(value: number) => [`€${value.toFixed(2)}`, 'EPS']} />
-            <Bar dataKey="eps" fill="#10b981" radius={[4, 4, 0, 0]} />
+            <Tooltip content={<CustomBarTooltip />} />
+            {selectedCompanyIds.size > 1 ? (
+              <Bar dataKey="eps" radius={[4, 4, 0, 0]}>
+                {epsData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Bar>
+            ) : (
+              <Bar dataKey="eps" fill="#10b981" radius={[4, 4, 0, 0]} />
+            )}
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
