@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import styled from 'styled-components';
-import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ComposedChart } from 'recharts';
+import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ComposedChart, Cell } from 'recharts';
 import { TrendingUp, DollarSign, BarChart3, Users, Briefcase, MessageSquare, Target, Activity, ArrowUp } from 'lucide-react';
 import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 
@@ -175,6 +175,27 @@ const COLORS = {
   pink: '#ec4899'
 };
 
+// Company-specific colors for multi-selection
+const COMPANY_COLORS = [
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
+  '#06b6d4', '#f97316', '#ec4899', '#6366f1', '#14b8a6',
+  '#84cc16', '#f43f5e', '#a855f7', '#0ea5e9', '#22c55e',
+  '#fb923c', '#e11d48', '#7c3aed', '#0284c7', '#16a34a'
+];
+
+// Function to get consistent color for a company
+const getCompanyColor = (ticker: string, selectedCompanies: SecureIBEXCompanyData[], selectedCompanyIds: Set<string>): string => {
+  if (selectedCompanyIds.size <= 1) {
+    // Single company or none selected - use default colors
+    return COLORS.primary;
+  }
+  
+  // Multiple companies selected - use consistent company-based colors
+  const sortedTickers = Array.from(selectedCompanyIds).sort();
+  const index = sortedTickers.indexOf(ticker);
+  return COMPANY_COLORS[index % COMPANY_COLORS.length];
+};
+
 const formatCurrency = (value: number | null | undefined): string => {
   if (!value) return '€0';
   if (value >= 1e9) return `€${(value / 1e9).toFixed(1)}B`;
@@ -250,16 +271,18 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
         const position = ((company.currentPriceEur - company.low52!) / range) * 100;
         return {
           name: company.company.length > 10 ? company.company.substring(0, 10) + '...' : company.company,
+          ticker: company.ticker,
           high: company.high52,
           low: company.low52,
           current: company.currentPriceEur,
           position,
-          range
+          range,
+          color: getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)
         };
       })
       .sort((a, b) => b.position - a.position)
       .slice(0, 15);
-  }, [filteredCompanies]);
+  }, [filteredCompanies, selectedCompanyIds]);
 
   // Volume vs Market Cap Analysis
   const volumeMarketCapData = useMemo(() => {
@@ -269,9 +292,11 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
         x: (company.volumeEur || 0) / 1e6, // Volume in millions
         y: (company.marketCapEur || 0) / 1e9, // Market cap in billions
         name: company.company,
-        turnover: ((company.volumeEur || 0) / (company.marketCapEur || 1)) * 100 // Turnover rate
+        ticker: company.ticker,
+        turnover: ((company.volumeEur || 0) / (company.marketCapEur || 1)) * 100, // Turnover rate
+        color: getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)
       }));
-  }, [filteredCompanies]);
+  }, [filteredCompanies, selectedCompanyIds]);
 
   // Smart Insights Generation
   const insights = useMemo(() => {
@@ -387,7 +412,15 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
                   name === 'x' ? 'Volume' : 'Market Cap'
                 ]}
               />
-              <Scatter name="Companies" dataKey="y" fill={COLORS.success} />
+              {selectedCompanyIds.size > 1 ? (
+                <Scatter name="Companies" dataKey="y">
+                  {volumeMarketCapData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Scatter>
+              ) : (
+                <Scatter name="Companies" dataKey="y" fill={COLORS.success} />
+              )}
             </ScatterChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -415,10 +448,37 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
                   return [`€${Number(value).toFixed(2)}`, name === 'high' ? '52W High' : name === 'low' ? '52W Low' : 'Current'];
                 }}
               />
-              <Bar yAxisId="position" dataKey="position" fill={COLORS.warning} opacity={0.3} />
-              <Line yAxisId="price" type="monotone" dataKey="high" stroke={COLORS.danger} strokeWidth={2} />
-              <Line yAxisId="price" type="monotone" dataKey="low" stroke={COLORS.success} strokeWidth={2} />
-              <Line yAxisId="price" type="monotone" dataKey="current" stroke={COLORS.primary} strokeWidth={3} />
+              {selectedCompanyIds.size > 1 ? (
+                <>
+                  <Bar yAxisId="position" dataKey="position" opacity={0.3}>
+                    {priceRangeData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                  <Line yAxisId="price" type="monotone" dataKey="high" strokeWidth={2}>
+                    {priceRangeData.map((entry, index) => (
+                      <Cell key={`cell-high-${index}`} stroke={entry.color} />
+                    ))}
+                  </Line>
+                  <Line yAxisId="price" type="monotone" dataKey="low" strokeWidth={2}>
+                    {priceRangeData.map((entry, index) => (
+                      <Cell key={`cell-low-${index}`} stroke={entry.color} />
+                    ))}
+                  </Line>
+                  <Line yAxisId="price" type="monotone" dataKey="current" strokeWidth={3}>
+                    {priceRangeData.map((entry, index) => (
+                      <Cell key={`cell-current-${index}`} stroke={entry.color} />
+                    ))}
+                  </Line>
+                </>
+              ) : (
+                <>
+                  <Bar yAxisId="position" dataKey="position" fill={COLORS.warning} opacity={0.3} />
+                  <Line yAxisId="price" type="monotone" dataKey="high" stroke={COLORS.danger} strokeWidth={2} />
+                  <Line yAxisId="price" type="monotone" dataKey="low" stroke={COLORS.success} strokeWidth={2} />
+                  <Line yAxisId="price" type="monotone" dataKey="current" stroke={COLORS.primary} strokeWidth={3} />
+                </>
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -442,8 +502,10 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
                 .slice(0, 12)
                 .map(c => ({
                   name: c.company.length > 12 ? c.company.substring(0, 12) + '...' : c.company,
+                  ticker: c.ticker,
                   eps: c.eps || 0,
-                  pe: c.peRatio || 0
+                  pe: c.peRatio || 0,
+                  color: getCompanyColor(c.ticker, filteredCompanies, selectedCompanyIds)
                 }))
               }
             >
@@ -452,8 +514,35 @@ export const ComprehensiveInsights: React.FC<ComprehensiveInsightsProps> = ({
               <YAxis yAxisId="eps" orientation="left" tickFormatter={(value) => `€${value}`} />
               <YAxis yAxisId="pe" orientation="right" />
               <Tooltip />
-              <Bar yAxisId="eps" dataKey="eps" fill={COLORS.purple} radius={[4, 4, 0, 0]} />
-              <Line yAxisId="pe" type="monotone" dataKey="pe" stroke={COLORS.orange} strokeWidth={2} />
+              {selectedCompanyIds.size > 1 ? (
+                <>
+                  <Bar yAxisId="eps" dataKey="eps" radius={[4, 4, 0, 0]}>
+                    {filteredCompanies
+                      .filter(c => c.eps !== null)
+                      .sort((a, b) => (b.eps || 0) - (a.eps || 0))
+                      .slice(0, 12)
+                      .map((company, index) => (
+                        <Cell key={`cell-${index}`} fill={getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)} />
+                      ))
+                    }
+                  </Bar>
+                  <Line yAxisId="pe" type="monotone" dataKey="pe" strokeWidth={2}>
+                    {filteredCompanies
+                      .filter(c => c.eps !== null)
+                      .sort((a, b) => (b.eps || 0) - (a.eps || 0))
+                      .slice(0, 12)
+                      .map((company, index) => (
+                        <Cell key={`cell-line-${index}`} stroke={getCompanyColor(company.ticker, filteredCompanies, selectedCompanyIds)} />
+                      ))
+                    }
+                  </Line>
+                </>
+              ) : (
+                <>
+                  <Bar yAxisId="eps" dataKey="eps" fill={COLORS.purple} radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="pe" type="monotone" dataKey="pe" stroke={COLORS.orange} strokeWidth={2} />
+                </>
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </ChartCard>
