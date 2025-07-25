@@ -307,10 +307,37 @@ export function NodeDetailModal({ isOpen, onClose, nodeData }: Props) {
     }
   };
 
-  if (!nodeData) return null;
+  // Safety checks - don't render modal if critical data is missing (after all hooks)
+  if (!isOpen || !nodeData || !nodeData.id || !nodeData.label) {
+    return null;
+  }
+  
+  // Additional safety check - don't render if the required data is missing
+  if (nodeData.type === 'company' && !nodeData.company) {
+    console.error('Modal opened for company but company data is missing:', {
+      nodeData,
+      hasId: !!nodeData.id,
+      hasLabel: !!nodeData.label,
+      hasCompany: !!nodeData.company,
+      nodeDataKeys: Object.keys(nodeData)
+    });
+    return null;
+  }
+  if (nodeData.type === 'director' && !nodeData.director) {
+    console.error('Modal opened for director but director data is missing:', nodeData);
+    return null;
+  }
+  if (nodeData.type === 'shareholder' && !nodeData.shareholder) {
+    console.error('Modal opened for shareholder but shareholder data is missing:', nodeData);
+    return null;
+  }
 
   const renderCompanyDetails = () => {
-    const company = nodeData.company!;
+    const company = nodeData.company;
+    if (!company) {
+      console.error('Company data is missing from nodeData:', nodeData);
+      return <div>Company data not available</div>;
+    }
     return (
       <>
         <Section>
@@ -404,7 +431,11 @@ export function NodeDetailModal({ isOpen, onClose, nodeData }: Props) {
   };
 
   const renderDirectorDetails = () => {
-    const director = nodeData.director!;
+    const director = nodeData.director;
+    if (!director) {
+      console.error('Director data is missing from nodeData:', nodeData);
+      return <div>Director data not available</div>;
+    }
     return (
       <>
         <Section>
@@ -512,7 +543,11 @@ export function NodeDetailModal({ isOpen, onClose, nodeData }: Props) {
   };
 
   const renderShareholderDetails = () => {
-    const shareholder = nodeData.shareholder!;
+    const shareholder = nodeData.shareholder;
+    if (!shareholder) {
+      console.error('Shareholder data is missing from nodeData:', nodeData);
+      return <div>Shareholder data not available</div>;
+    }
     return (
       <>
         <Section>
@@ -561,23 +596,24 @@ export function NodeDetailModal({ isOpen, onClose, nodeData }: Props) {
     );
   };
 
-  return (
-    <Overlay isOpen={isOpen} onClick={handleOverlayClick}>
-      <Modal isOpen={isOpen}>
-        <Header>
-          <Title>
-            {getTypeIcon(nodeData.type)}
-            {nodeData.label}
-          </Title>
-          <Subtitle>
-            {nodeData.type === 'company' && nodeData.company?.sector}
-            {nodeData.type === 'director' && 'Board Director'}
-            {nodeData.type === 'shareholder' && 'Shareholder'}
-          </Subtitle>
-          <CloseButton onClick={onClose}>
-            <X size={20} />
-          </CloseButton>
-        </Header>
+  const renderModalContent = () => {
+    try {
+      return (
+        <>
+          <Header>
+            <Title>
+              {getTypeIcon(nodeData.type)}
+              {nodeData.label}
+            </Title>
+            <Subtitle>
+              {nodeData.type === 'company' && nodeData.company?.sector}
+              {nodeData.type === 'director' && 'Board Director'}
+              {nodeData.type === 'shareholder' && 'Shareholder'}
+            </Subtitle>
+            <CloseButton onClick={onClose}>
+              <X size={20} />
+            </CloseButton>
+          </Header>
 
         <Content>
           {isLoading && (
@@ -619,10 +655,47 @@ export function NodeDetailModal({ isOpen, onClose, nodeData }: Props) {
             </Section>
           )}
 
+          {!isLoading && !error && !wikipediaData && (
+            <Section>
+              <SectionTitle>
+                <Globe size={18} />
+                External Information
+              </SectionTitle>
+              <div style={{ 
+                padding: '20px', 
+                textAlign: 'center', 
+                color: '#6b7280', 
+                background: '#f9fafb', 
+                borderRadius: '12px' 
+              }}>
+                No relevant Wikipedia information found for this entity.
+              </div>
+            </Section>
+          )}
+
           {nodeData.type === 'company' && renderCompanyDetails()}
           {nodeData.type === 'director' && renderDirectorDetails()}
           {nodeData.type === 'shareholder' && renderShareholderDetails()}
         </Content>
+        </>
+      );
+    } catch (error) {
+      console.error('Error rendering modal content:', error);
+      return (
+        <Header>
+          <Title>Error</Title>
+          <CloseButton onClick={onClose}>
+            <X size={20} />
+          </CloseButton>
+        </Header>
+      );
+    }
+  };
+
+  return (
+    <Overlay isOpen={isOpen} onClick={handleOverlayClick}>
+      <Modal isOpen={isOpen}>
+        {renderModalContent()}
       </Modal>
     </Overlay>
   );

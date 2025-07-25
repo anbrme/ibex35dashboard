@@ -79,6 +79,17 @@ export class SecureGoogleSheetsService {
       });
       console.log(`📊 Last updated: ${result.lastUpdated}`);
       
+      // Debug: Log raw company data to see available columns
+      if (rawCompanies.length > 0) {
+        console.log('🔍 Available columns in raw data:', Object.keys(rawCompanies[0]));
+        const sampleCompany = rawCompanies.find((c: any) => c.ticker === 'SAN') || rawCompanies[0];
+        console.log('🔍 Price change values for sample company:', {
+          ticker: sampleCompany.ticker,
+          changePercent: sampleCompany.changePercent,
+          priceChange: sampleCompany.priceChange
+        });
+      }
+
       // Transform API response to match frontend interface
       const companies: SecureIBEXCompanyData[] = rawCompanies.map((rawCompany: any) => ({
         ticker: rawCompany.ticker,
@@ -88,8 +99,8 @@ export class SecureGoogleSheetsService {
         currentPriceEur: rawCompany.current_price_eur || rawCompany.currentPriceEur || 0,
         marketCapEur: rawCompany.market_cap_eur || rawCompany.marketCapEur || 0,
         volumeEur: rawCompany.volume || rawCompany.volumeEur || 0,
-        changePercent: rawCompany.price_change_percentage || 0,
-        priceChange: rawCompany.price_change || rawCompany.priceChange || 0,
+        changePercent: rawCompany.change_percent || 0,
+        priceChange: rawCompany.price_change || 0,
         peRatio: rawCompany.pe_ratio || rawCompany.peRatio || null,
         eps: rawCompany.eps || null,
         high52: rawCompany.high_52 || rawCompany.high52 || null,

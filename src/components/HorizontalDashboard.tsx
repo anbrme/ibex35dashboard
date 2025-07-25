@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import styled, { createGlobalStyle, keyframes } from 'styled-components';
 import { Search, Building2, Users, Network, PieChart, RefreshCw, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
-import { CytoscapeNetworkGraph } from './enhanced/CytoscapeNetworkGraph';
+import { EChartsNetworkGraph } from './enhanced/EChartsNetworkGraph';
 import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
 import { ShareholdersAnalysisPanel } from './ShareholdersAnalysisPanel';
 import { ComprehensiveInsights } from './insights/ComprehensiveInsights';
@@ -540,7 +540,7 @@ export function HorizontalDashboard({}: HorizontalDashboardProps) {
     switch (activeView) {
       case 'network':
         return (
-          <CytoscapeNetworkGraph 
+          <EChartsNetworkGraph 
             companies={selectedCompanies}
             selectedCompanyIds={selectedCompanyIds}
           />

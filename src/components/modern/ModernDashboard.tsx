@@ -5,7 +5,7 @@ import { ModernCompanyCard } from './ModernCompanyCard';
 import { useSecureIbex35Data } from '../../hooks/useSecureIbex35Data';
 import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 import { Ibex35Metrics } from './Ibex35Metrics';
-import { VisualizationPanel } from '../charts/VisualizationPanel';
+// VisualizationPanel removed - using ECharts components instead
 
 export function ModernDashboard() {
   const { companies, loading } = useSecureIbex35Data();
@@ -87,10 +87,7 @@ export function ModernDashboard() {
           avgPrice={avgPrice}
           totalVolume={totalVolume}
         />
-        <VisualizationPanel 
-          companies={companies}
-          selectedCompany={selectedCompany}
-        />
+        {/* VisualizationPanel replaced with ECharts components in StyledDashboard */}
       </main>
     </div>
   );

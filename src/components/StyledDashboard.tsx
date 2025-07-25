@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import styled, { createGlobalStyle, keyframes } from 'styled-components';
 import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, DollarSign, ArrowUp, ArrowDown, Percent, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
-import { CytoscapeNetworkGraph } from './enhanced/CytoscapeNetworkGraph';
+import { EChartsNetworkGraph } from './enhanced/EChartsNetworkGraph';
 import { NetworkAnalyticsDashboard } from './enhanced/NetworkAnalyticsDashboard';
 import { networkAnalyticsService } from '../services/networkAnalytics';
 import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
@@ -38,11 +38,10 @@ const pulse = keyframes`
 
 // Styled components
 const Container = styled.div<{ $panelVisible: boolean }>`
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 50%, #581c87 100%);
   transition: all 0.3s ease;
-  overflow: hidden;
 `;
 
 const LeftPanel = styled.div<{ $isVisible: boolean; $isFullscreen: boolean }>`
@@ -414,14 +413,22 @@ const DirectorsPreview = styled.div`
   color: #78350f;
 `;
 
+const SearchMatchIndicator = styled.div`
+  font-size: 11px;
+  color: #059669;
+  background: rgba(5, 150, 105, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+  font-weight: 500;
+`;
+
 const RightPanel = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100vh;
   min-height: 100vh;
   position: relative;
-  overflow: hidden;
 `;
 
 const PanelToggle = styled.button<{ $isVisible: boolean }>`
@@ -588,7 +595,9 @@ const TitleRow = styled.div`
   flex-shrink: 0;
 `;
 
-const AnalyticsToggle = styled.button<{ isActive: boolean }>`
+const AnalyticsToggle = styled.button.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isActive'
+})<{ isActive: boolean }>`
   display: flex;
   align-items: center;
   gap: 8px;
@@ -611,8 +620,7 @@ const VisualizationContent = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+  min-height: 600px; /* Ensure minimum height for network graph */
 `;
 
 const LoadingContainer = styled.div`
@@ -804,12 +812,107 @@ export function StyledDashboard() {
   };
   
   const filteredCompanies = useMemo(() => {
-    return companies.filter(company =>
-      (company.company || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (company.ticker || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (company.formattedTicker || '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    if (!searchQuery.trim()) return companies;
+    
+    const query = searchQuery.toLowerCase();
+    
+    return companies.filter(company => {
+      // Search by company name and ticker
+      const companyMatch = 
+        (company.company || '').toLowerCase().includes(query) ||
+        (company.ticker || '').toLowerCase().includes(query) ||
+        (company.formattedTicker || '').toLowerCase().includes(query);
+      
+      // Search by director names
+      const directorMatch = company.directors?.some(director =>
+        (director.name || '').toLowerCase().includes(query)
+      ) || false;
+      
+      // Search by shareholder names
+      const shareholderMatch = company.shareholders?.some(shareholder =>
+        (shareholder.name || '').toLowerCase().includes(query)
+      ) || false;
+      
+      return companyMatch || directorMatch || shareholderMatch;
+    });
   }, [companies, searchQuery]);
+
+  // Auto-select companies when searching for directors/shareholders
+  useEffect(() => {
+    if (!searchQuery.trim()) return;
+    
+    const query = searchQuery.toLowerCase();
+    const matchingCompanies = new Set<string>();
+    
+    companies.forEach(company => {
+      // Check if this company matches due to director search
+      const directorMatch = company.directors?.some(director =>
+        (director.name || '').toLowerCase().includes(query)
+      );
+      
+      // Check if this company matches due to shareholder search
+      const shareholderMatch = company.shareholders?.some(shareholder =>
+        (shareholder.name || '').toLowerCase().includes(query)
+      );
+      
+      // If the search matches a director or shareholder (but not the company name itself)
+      const companyNameMatch = 
+        (company.company || '').toLowerCase().includes(query) ||
+        (company.ticker || '').toLowerCase().includes(query) ||
+        (company.formattedTicker || '').toLowerCase().includes(query);
+      
+      if ((directorMatch || shareholderMatch) && !companyNameMatch && company.ticker) {
+        matchingCompanies.add(company.ticker);
+      }
+    });
+    
+    // Auto-select companies that match through directors/shareholders
+    if (matchingCompanies.size > 0) {
+      setSelectedCompanyIds(prev => {
+        const next = new Set(prev);
+        matchingCompanies.forEach(ticker => next.add(ticker));
+        return next;
+      });
+    }
+  }, [searchQuery, companies]);
+
+  // Helper function to determine why a company matches the search
+  const getSearchMatchReason = useCallback((company: SecureIBEXCompanyData) => {
+    if (!searchQuery.trim()) return null;
+    
+    const query = searchQuery.toLowerCase();
+    
+    const companyMatch = 
+      (company.company || '').toLowerCase().includes(query) ||
+      (company.ticker || '').toLowerCase().includes(query) ||
+      (company.formattedTicker || '').toLowerCase().includes(query);
+    
+    if (companyMatch) return 'company';
+    
+    const matchingDirectors = company.directors?.filter(director =>
+      (director.name || '').toLowerCase().includes(query)
+    ) || [];
+    
+    const matchingShareholders = company.shareholders?.filter(shareholder =>
+      (shareholder.name || '').toLowerCase().includes(query)
+    ) || [];
+    
+    if (matchingDirectors.length > 0) {
+      return {
+        type: 'director',
+        matches: matchingDirectors.map(d => d.name).slice(0, 2)
+      };
+    }
+    
+    if (matchingShareholders.length > 0) {
+      return {
+        type: 'shareholder',
+        matches: matchingShareholders.map(s => s.name).slice(0, 2)
+      };
+    }
+    
+    return null;
+  }, [searchQuery]);
   
   const toggleCompanySelection = useCallback((companyId: string) => {
     setSelectedCompanyIds(prev => {
@@ -957,7 +1060,7 @@ export function StyledDashboard() {
                 <Search size={16} />
               </SearchIcon>
               <SearchInput
-                placeholder="Search companies..."
+                placeholder="Search companies, directors, or shareholders..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -986,6 +1089,7 @@ export function StyledDashboard() {
             {filteredCompanies.map((company) => {
               const isSelected = selectedCompanyIds.has(company.ticker);
               const isExpanded = expandedCompanyIds.has(company.ticker);
+              const searchMatch = getSearchMatchReason(company);
               
               return (
                 <CompanyCard
@@ -999,6 +1103,15 @@ export function StyledDashboard() {
                       <CompanyDetails>
                         <CompanyTicker>{company.company}</CompanyTicker>
                         <CompanySector>{company.formattedTicker || company.ticker}</CompanySector>
+                        {searchMatch && typeof searchMatch === 'object' && (
+                          <SearchMatchIndicator>
+                            📍 Found via {searchMatch.type}: {searchMatch.matches.join(', ')}
+                            {searchMatch.matches.length < (searchMatch.type === 'director' ? 
+                              (company.directors?.filter(d => d.name.toLowerCase().includes(searchQuery.toLowerCase())).length || 0) :
+                              (company.shareholders?.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length || 0)
+                            ) && ' (+more)'}
+                          </SearchMatchIndicator>
+                        )}
                       </CompanyDetails>
                     </CompanyInfo>
                     <SelectionIndicator isSelected={isSelected} />
@@ -1220,7 +1333,7 @@ export function StyledDashboard() {
               <VisualizationContent>
                 {activeView === 'network' && (
                   <>
-                    <CytoscapeNetworkGraph
+                    <EChartsNetworkGraph
                       companies={companies}
                       selectedCompanyIds={selectedCompanyIds}
                     />
