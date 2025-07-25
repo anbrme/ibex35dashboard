@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import styled from 'styled-components';
 import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus } from 'lucide-react';
 import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
+import { NodeDetailModal } from './NodeDetailModal';
+import { networkAnalyticsService } from '../../services/networkAnalytics';
 
 interface Props {
   companies: SecureIBEXCompanyData[];
@@ -150,6 +152,48 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; visible: boolean }>({
     x: 0, y: 0, text: '', visible: false
   });
+  const [modalData, setModalData] = useState<{
+    isOpen: boolean;
+    nodeData: {
+      id: string;
+      type: 'company' | 'director' | 'shareholder';
+      label: string;
+      company?: SecureIBEXCompanyData;
+      director?: {
+        name: string;
+        position?: string;
+        allPositions?: string[];
+        companyCount?: number;
+        appointmentDate?: string;
+      };
+      shareholder?: {
+        name: string;
+        type?: string;
+        percentage?: number;
+        totalPercentage?: number;
+        companyCount?: number;
+        reportDate?: string;
+      };
+      companies?: string[];
+      networkMetrics?: {
+        centrality: number;
+        betweennessCentrality: number;
+        closeness: number;
+        degree: number;
+        influence: number;
+        connections: number;
+      };
+    } | null;
+  }>({
+    isOpen: false,
+    nodeData: null
+  });
+
+  // Calculate network analytics
+  const networkAnalysis = useMemo(() => {
+    if (!companies || companies.length === 0) return null;
+    return networkAnalyticsService.calculateNetworkMetrics(companies);
+  }, [companies]);
 
   useEffect(() => {
     if (!containerRef.current || !companies || companies.length === 0) return;
@@ -172,11 +216,50 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     const elements: ElementDefinition[] = [];
     let hasValidElements = false;
 
-    // Calculate node sizes based on number of companies
+    // Calculate node sizes based on number of companies and network metrics
     const numCompanies = relevantCompanies.length;
-    const companySize = Math.max(30, Math.min(60, 200 / Math.sqrt(numCompanies)));
-    const directorSize = Math.max(20, Math.min(40, 150 / Math.sqrt(numCompanies)));
-    const shareholderSize = Math.max(15, Math.min(35, 120 / Math.sqrt(numCompanies)));
+    const baseCompanySize = Math.max(30, Math.min(60, 200 / Math.sqrt(numCompanies)));
+    const baseDirectorSize = Math.max(20, Math.min(40, 150 / Math.sqrt(numCompanies)));
+    const baseShareholderSize = Math.max(15, Math.min(35, 120 / Math.sqrt(numCompanies)));
+
+    // Helper function to get enhanced node size based on metrics
+    const getEnhancedNodeSize = (baseSize: number, nodeId: string): number => {
+      if (!networkAnalysis) return baseSize;
+      
+      const metrics = networkAnalyticsService.getNodeMetrics(nodeId, networkAnalysis);
+      if (!metrics) return baseSize;
+      
+      // Scale based on influence and centrality
+      const influenceMultiplier = Math.max(1, Math.min(2, 1 + metrics.influence));
+      const centralityMultiplier = Math.max(1, Math.min(1.5, 1 + metrics.centrality));
+      
+      return Math.round(baseSize * influenceMultiplier * centralityMultiplier);
+    };
+
+    // Helper function to get enhanced node color based on metrics
+    const getEnhancedNodeColor = (baseColor: string, nodeId: string, type: string): string => {
+      if (!networkAnalysis) return baseColor;
+      
+      const metrics = networkAnalyticsService.getNodeMetrics(nodeId, networkAnalysis);
+      if (!metrics) return baseColor;
+      
+      // Enhanced colors for high-influence nodes
+      if (type === 'company') {
+        if (metrics.influence > 2) return '#1e40af'; // Darker blue for high influence companies
+        if (metrics.centrality > 0.5) return '#2563eb'; // Medium blue for central companies
+        return baseColor;
+      } else if (type === 'director') {
+        if (metrics.connections > 2) return '#581c87'; // Darker purple for cross-board directors
+        if (metrics.influence > 3) return '#6b21a8'; // Enhanced purple for influential directors
+        return baseColor;
+      } else if (type === 'shareholder') {
+        if (metrics.influence > 1) return '#047857'; // Darker green for major shareholders
+        if (metrics.connections > 1) return '#059669'; // Enhanced green for cross-company shareholders
+        return baseColor;
+      }
+      
+      return baseColor;
+    };
 
     // Collect and consolidate directors and shareholders
     const directorsMap = new Map<string, {
@@ -247,14 +330,19 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     // Add company nodes
     relevantCompanies.forEach(company => {
       if (company && company.ticker) {
+        const baseColor = selectedCompanyIds.has(company.ticker) ? '#3b82f6' : '#6366f1';
+        const enhancedSize = getEnhancedNodeSize(baseCompanySize, company.ticker);
+        const enhancedColor = getEnhancedNodeColor(baseColor, company.ticker, 'company');
+        
         elements.push({
           data: {
             id: company.ticker,
             label: company.formattedTicker || company.ticker,
             type: 'company',
             company: company,
-            size: companySize,
-            color: selectedCompanyIds.has(company.ticker) ? '#3b82f6' : '#6366f1'
+            size: enhancedSize,
+            color: enhancedColor,
+            networkMetrics: networkAnalysis ? networkAnalyticsService.getNodeMetrics(company.ticker, networkAnalysis) : null
           }
         });
         hasValidElements = true;
@@ -267,10 +355,15 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       const director = directorData.director;
       const companyCount = directorData.companies.size;
       
-      // Adjust size based on number of companies (bigger for cross-board directors)
-      const adjustedSize = companyCount > 1 
-        ? Math.min(directorSize * 1.5, directorSize + 10)
-        : directorSize;
+      // Base color and size
+      const baseColor = companyCount > 1 ? '#7c3aed' : '#8b5cf6';
+      const baseSize = companyCount > 1 
+        ? Math.min(baseDirectorSize * 1.5, baseDirectorSize + 10)
+        : baseDirectorSize;
+
+      // Apply network analytics enhancements
+      const enhancedSize = getEnhancedNodeSize(baseSize, directorId);
+      const enhancedColor = getEnhancedNodeColor(baseColor, directorId, 'director');
 
       elements.push({
         data: {
@@ -283,8 +376,9 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             companyCount: companyCount
           },
           companies: Array.from(directorData.companies),
-          size: adjustedSize,
-          color: companyCount > 1 ? '#7c3aed' : '#8b5cf6' // Darker purple for cross-board
+          size: enhancedSize,
+          color: enhancedColor,
+          networkMetrics: networkAnalysis ? networkAnalyticsService.getNodeMetrics(directorId, networkAnalysis) : null
         }
       });
 
@@ -307,10 +401,15 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       const shareholder = shareholderData.shareholder;
       const companyCount = shareholderData.companies.size;
       
-      // Adjust size based on number of companies and total percentage
-      const adjustedSize = companyCount > 1 
-        ? Math.min(shareholderSize * 1.5, shareholderSize + 8)
-        : shareholderSize;
+      // Base color and size
+      const baseColor = companyCount > 1 ? '#059669' : '#10b981';
+      const baseSize = companyCount > 1 
+        ? Math.min(baseShareholderSize * 1.5, baseShareholderSize + 8)
+        : baseShareholderSize;
+
+      // Apply network analytics enhancements
+      const enhancedSize = getEnhancedNodeSize(baseSize, shareholderId);
+      const enhancedColor = getEnhancedNodeColor(baseColor, shareholderId, 'shareholder');
 
       elements.push({
         data: {
@@ -323,8 +422,9 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             totalPercentage: shareholderData.totalPercentage
           },
           companies: Array.from(shareholderData.companies),
-          size: adjustedSize,
-          color: companyCount > 1 ? '#059669' : '#10b981' // Darker green for cross-company
+          size: enhancedSize,
+          color: enhancedColor,
+          networkMetrics: networkAnalysis ? networkAnalyticsService.getNodeMetrics(shareholderId, networkAnalysis) : null
         }
       });
 
@@ -553,11 +653,20 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         const marketCap = company?.marketCapEur || 0;
         const companyName = company?.company || company?.name || data.label || 'Unknown Company';
         const sector = company?.sector || 'Unknown Sector';
+        const metrics = data.networkMetrics;
+        
         tooltipText = `${companyName}\n${sector}\n${directorsCount} directors\nMarket Cap: €${(marketCap / 1e9).toFixed(1)}B`;
+        
+        if (metrics) {
+          tooltipText += `\nInfluence: ${metrics.influence.toFixed(2)}`;
+          tooltipText += `\nCentrality: ${metrics.centrality.toFixed(2)}`;
+          tooltipText += `\nConnections: ${metrics.connections}`;
+        }
       } else if (data.director) {
         const director = data.director;
         const companies = data.companies || [];
         const companyCount = director.companyCount || 1;
+        const metrics = data.networkMetrics;
         
         tooltipText = `${director.name || 'Unknown Director'}`;
         if (director.allPositions && director.allPositions.length > 0) {
@@ -574,10 +683,16 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         if (director.appointmentDate) {
           tooltipText += `\nSince: ${director.appointmentDate}`;
         }
+        
+        if (metrics) {
+          tooltipText += `\nInfluence: ${metrics.influence.toFixed(2)}`;
+          tooltipText += `\nCentrality: ${metrics.centrality.toFixed(2)}`;
+        }
       } else if (data.shareholder) {
         const shareholder = data.shareholder;
         const companies = data.companies || [];
         const companyCount = shareholder.companyCount || 1;
+        const metrics = data.networkMetrics;
         
         tooltipText = `${shareholder.name || 'Unknown Shareholder'}`;
         tooltipText += `\nType: ${shareholder.type || 'Unknown'}`;
@@ -593,6 +708,11 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         
         if (shareholder.reportDate) {
           tooltipText += `\nReport Date: ${shareholder.reportDate}`;
+        }
+        
+        if (metrics) {
+          tooltipText += `\nInfluence: ${metrics.influence.toFixed(2)}`;
+          tooltipText += `\nCentrality: ${metrics.centrality.toFixed(2)}`;
         }
       }
       
@@ -637,17 +757,21 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       connectedNodes.addClass('highlighted');
       connectedEdges.addClass('highlighted');
 
-      // Display shareholder information
+      // Open modal with node details
       const data = node.data();
-      if (data.type === 'company') {
-        const company = data.company;
-        if (company.shareholders) {
-          const shareholderDetails = company.shareholders.map((s: { name: string; percentage?: number }) => `${s.name}: ${s.percentage || 0}%`).join('\n');
-          alert(`Shareholders of ${company.name}:\n${shareholderDetails}`);
-        } else {
-          alert(`No shareholder information available for ${company.name}.`);
+      setModalData({
+        isOpen: true,
+        nodeData: {
+          id: data.id,
+          type: data.type,
+          label: data.label,
+          company: data.company,
+          director: data.director,
+          shareholder: data.shareholder,
+          companies: data.companies,
+          networkMetrics: data.networkMetrics
         }
-      }
+      });
     });
 
     cy.on('tap', (event) => {
@@ -666,7 +790,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         console.error('Cytoscape cleanup error:', error);
       }
     };
-  }, [companies, selectedCompanyIds]);
+  }, [companies, selectedCompanyIds, networkAnalysis]);
 
   const handleZoomIn = () => {
     if (cyRef.current) {
@@ -799,6 +923,12 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
           <div key={i}>{line}</div>
         ))}
       </Tooltip>
+
+      <NodeDetailModal
+        isOpen={modalData.isOpen}
+        onClose={() => setModalData({ isOpen: false, nodeData: null })}
+        nodeData={modalData.nodeData}
+      />
     </Container>
   );
 }
