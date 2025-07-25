@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import styled from 'styled-components';
-import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Settings } from 'lucide-react';
+import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Settings, Filter } from 'lucide-react';
 import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 import { NodeDetailModal } from './NodeDetailModal';
 import { networkAnalyticsService } from '../../services/networkAnalytics';
@@ -29,12 +29,14 @@ const Container = styled.div.withConfig({
     ? '0 0 50px rgba(0, 0, 0, 0.3)' 
     : 'inset 0 2px 8px rgba(0, 0, 0, 0.1)'};
   transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
 `;
 
 const GraphContainer = styled.div`
   width: 100%;
-  height: 100%;
-  min-height: 400px;
+  flex: 1;
+  min-height: 0;
   position: relative;
 `;
 
@@ -106,19 +108,23 @@ const Tooltip = styled.div.withConfig({
 `;
 
 const Legend = styled.div.withConfig({
-  shouldForwardProp: (prop) => prop !== 'isFullscreen'
-})<{ isFullscreen: boolean }>`
+  shouldForwardProp: (prop) => !['isFullscreen', 'isVisible'].includes(prop as string)
+})<{ isFullscreen: boolean; isVisible: boolean }>`
   position: absolute;
   bottom: 16px;
   left: 16px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-radius: 12px;
-  padding: 16px;
+  padding: ${props => props.isVisible ? '16px' : '12px'};
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   z-index: 10;
   transition: all 0.3s ease;
+  max-height: ${props => props.isVisible ? '400px' : '50px'};
+  overflow: hidden;
+  cursor: pointer;
 `;
+
 
 const LegendTitle = styled.h4.withConfig({
   shouldForwardProp: (prop) => prop !== 'isFullscreen'
@@ -153,26 +159,6 @@ const LegendDot = styled.div<{ color: string; size?: number }>`
   flex-shrink: 0;
 `;
 
-const FilterNotice = styled.div`
-  position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(59, 130, 246, 0.95);
-  color: white;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  z-index: 15;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 400px;
-  text-align: center;
-`;
 
 const LayoutPanel = styled.div.withConfig({
   shouldForwardProp: (prop) => prop !== 'isVisible'
@@ -242,12 +228,99 @@ const LayoutSelector = styled.select`
   }
 `;
 
+const FilterPanel = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isVisible'
+})<{ isVisible: boolean }>`
+  position: absolute;
+  top: 130px;
+  left: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  z-index: 15;
+  transform: ${props => props.isVisible ? 'translateX(0)' : 'translateX(-100%)'};  
+  opacity: ${props => props.isVisible ? 1 : 0};
+  transition: all 0.3s ease;
+  min-width: 200px;
+`;
+
+const FilterToggle = styled.button`
+  position: absolute;
+  top: 130px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 16;
+  
+  &:hover {
+    background: white;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
+`;
+
+const FilterTitle = styled.h4`
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const FilterGroup = styled.div`
+  margin-bottom: 16px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const FilterLabel = styled.label`
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+`;
+
+const FilterInput = styled.input`
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+`;
+
 export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [layoutPanelVisible, setLayoutPanelVisible] = useState(false);
+  const [legendVisible, setLegendVisible] = useState(true);
+  const [filtersVisible, setFiltersVisible] = useState(false);
   const [currentLayout, setCurrentLayout] = useState('cose');
+  const [minDirectorCompanies, setMinDirectorCompanies] = useState(1);
+  const [minShareholderPercentage, setMinShareholderPercentage] = useState(0);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; visible: boolean }>({
     x: 0, y: 0, text: '', visible: false
   });
@@ -294,10 +367,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     return networkAnalyticsService.calculateNetworkMetrics(companies);
   }, [companies]);
 
-  // Calculate filtering flags based on complexity
-  const numCompanies = selectedCompanyIds.size;
-  const shouldFilterDirectors = numCompanies > 15;
-  const shouldFilterShareholders = numCompanies > 20;
+  // Use user-defined filters instead of auto-simplification
 
   useEffect(() => {
     if (!containerRef.current || !companies || companies.length === 0) return;
@@ -459,9 +529,9 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       const director = directorData.director;
       const companyCount = directorData.companies.size;
       
-      // Filter directors for complex networks: only show cross-board directors (serving multiple companies)
-      if (shouldFilterDirectors && companyCount <= 1) {
-        return; // Skip directors who only serve on one board
+      // Filter directors based on user settings
+      if (companyCount < minDirectorCompanies) {
+        return; // Skip directors below threshold
       }
       
       // Base color and size
@@ -511,9 +581,9 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       const companyCount = shareholderData.companies.size;
       const totalPercentage = shareholderData.totalPercentage;
       
-      // Filter shareholders for complex networks: only show major shareholders (>3% or cross-company)
-      if (shouldFilterShareholders && companyCount <= 1 && totalPercentage < 3) {
-        return; // Skip minor shareholders
+      // Filter shareholders based on user settings
+      if (totalPercentage < minShareholderPercentage) {
+        return; // Skip shareholders below threshold
       }
       
       // Base color and size
@@ -948,7 +1018,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         console.error('Cytoscape cleanup error:', error);
       }
     };
-  }, [companies, selectedCompanyIds, networkAnalysis, shouldFilterDirectors, shouldFilterShareholders, isFullscreen]);
+  }, [companies, selectedCompanyIds, networkAnalysis, minDirectorCompanies, minShareholderPercentage, isFullscreen, currentLayout]);
 
   const handleZoomIn = () => {
     if (cyRef.current) {
@@ -1027,11 +1097,6 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     <Container isFullscreen={isFullscreen}>
       <GraphContainer ref={containerRef} />
       
-      {(shouldFilterDirectors || shouldFilterShareholders) && (
-        <FilterNotice>
-          💡 Network simplified: {shouldFilterDirectors ? 'showing cross-board directors only' : ''}{shouldFilterDirectors && shouldFilterShareholders ? ' • ' : ''}{shouldFilterShareholders ? 'showing major shareholders (>3%) only' : ''}
-        </FilterNotice>
-      )}
       
       <LayoutToggle 
         onClick={() => setLayoutPanelVisible(!layoutPanelVisible)}
@@ -1064,6 +1129,62 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         </LayoutSelector>
       </LayoutPanel>
       
+      {!filtersVisible && (
+        <FilterToggle 
+          onClick={() => setFiltersVisible(true)}
+          title="Network Filters"
+        >
+          <Filter size={16} />
+        </FilterToggle>
+      )}
+      
+      <FilterPanel isVisible={filtersVisible}>
+        <FilterTitle>
+          <Filter size={14} />
+          Network Filters
+        </FilterTitle>
+        
+        <FilterGroup>
+          <FilterLabel>Min. Director Companies</FilterLabel>
+          <FilterInput
+            type="number"
+            min="1"
+            max="10"
+            value={minDirectorCompanies}
+            onChange={(e) => setMinDirectorCompanies(parseInt(e.target.value) || 1)}
+            placeholder="Min companies"
+          />
+        </FilterGroup>
+        
+        <FilterGroup>
+          <FilterLabel>Min. Shareholder % ({minShareholderPercentage}%)</FilterLabel>
+          <FilterInput
+            type="range"
+            min="0"
+            max="50"
+            step="1"
+            value={minShareholderPercentage}
+            onChange={(e) => setMinShareholderPercentage(parseInt(e.target.value))}
+          />
+        </FilterGroup>
+        
+        <button
+          onClick={() => setFiltersVisible(false)}
+          style={{
+            width: '100%',
+            padding: '8px',
+            background: '#f3f4f6',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            marginTop: '8px'
+          }}
+        >
+          Close Filters
+        </button>
+      </FilterPanel>
+      
       <Controls>
         <ControlButton onClick={handleZoomIn} title="Zoom In">
           <ZoomIn size={16} />
@@ -1082,84 +1203,94 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         </ControlButton>
       </Controls>
       
-      <Legend isFullscreen={isFullscreen}>
-        <LegendTitle isFullscreen={isFullscreen}>Network Legend</LegendTitle>
-        <LegendItem isFullscreen={isFullscreen}>
-          <LegendDot color="#3b82f6" size={16} />
-          <span>Companies</span>
-        </LegendItem>
-        <LegendItem isFullscreen={isFullscreen}>
-          <LegendDot color="#8b5cf6" size={12} />
-          <span>Directors</span>
-        </LegendItem>
-        <LegendItem isFullscreen={isFullscreen}>
-          <LegendDot color="#7c3aed" size={14} />
-          <span>Cross-board Directors</span>
-        </LegendItem>
-        <LegendItem isFullscreen={isFullscreen}>
-          <div style={{ 
-            width: 10, 
-            height: 10, 
-            background: '#10b981', 
-            transform: 'rotate(45deg)',
-            borderRadius: '2px'
-          }} />
-          <span>Shareholders</span>
-        </LegendItem>
-        <LegendItem isFullscreen={isFullscreen}>
-          <div style={{ 
-            width: 12, 
-            height: 12, 
-            background: '#059669', 
-            transform: 'rotate(45deg)',
-            borderRadius: '2px'
-          }} />
-          <span>Major Shareholders</span>
-        </LegendItem>
-        <LegendItem isFullscreen={isFullscreen}>
-          <div style={{ 
-            width: 16, 
-            height: 3, 
-            background: 'rgba(139, 92, 246, 0.7)', 
-            position: 'relative',
-            borderRadius: '1px'
-          }}>
-            <div style={{
-              position: 'absolute',
-              right: -2,
-              top: -2,
-              width: 0,
-              height: 0,
-              borderLeft: '4px solid rgba(139, 92, 246, 0.9)',
-              borderTop: '3px solid transparent',
-              borderBottom: '3px solid transparent'
-            }} />
-          </div>
-          <span>Board Membership</span>
-        </LegendItem>
-        <LegendItem isFullscreen={isFullscreen}>
-          <div style={{ 
-            width: 16, 
-            height: 3, 
-            background: 'rgba(16, 185, 129, 0.7)', 
-            position: 'relative',
-            borderRadius: '1px',
-            borderTop: '1px dashed rgba(16, 185, 129, 0.9)',
-            borderBottom: '1px dashed rgba(16, 185, 129, 0.9)'
-          }}>
-            <div style={{
-              position: 'absolute',
-              right: -2,
-              top: -2,
-              width: 0,
-              height: 0,
-              borderLeft: '4px solid rgba(16, 185, 129, 0.9)',
-              borderTop: '3px solid transparent',
-              borderBottom: '3px solid transparent'
-            }} />
-          </div>
-          <span>Ownership</span>
-        </LegendItem>
+      <Legend 
+        isFullscreen={isFullscreen} 
+        isVisible={legendVisible}
+        onClick={() => setLegendVisible(!legendVisible)}
+      >
+        <LegendTitle isFullscreen={isFullscreen}>
+          Network Legend {legendVisible ? '−' : '+'}
+        </LegendTitle>
+        {legendVisible && (
+          <>
+            <LegendItem isFullscreen={isFullscreen}>
+              <LegendDot color="#3b82f6" size={16} />
+              <span>Companies</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <LegendDot color="#8b5cf6" size={12} />
+              <span>Directors</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <LegendDot color="#7c3aed" size={14} />
+              <span>Cross-board Directors</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <div style={{ 
+                width: 10, 
+                height: 10, 
+                background: '#10b981', 
+                transform: 'rotate(45deg)',
+                borderRadius: '2px'
+              }} />
+              <span>Shareholders</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <div style={{ 
+                width: 12, 
+                height: 12, 
+                background: '#059669', 
+                transform: 'rotate(45deg)',
+                borderRadius: '2px'
+              }} />
+              <span>Major Shareholders</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <div style={{ 
+                width: 16, 
+                height: 3, 
+                background: 'rgba(139, 92, 246, 0.7)', 
+                position: 'relative',
+                borderRadius: '1px'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  right: -2,
+                  top: -2,
+                  width: 0,
+                  height: 0,
+                  borderLeft: '4px solid rgba(139, 92, 246, 0.9)',
+                  borderTop: '3px solid transparent',
+                  borderBottom: '3px solid transparent'
+                }} />
+              </div>
+              <span>Board Membership</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <div style={{ 
+                width: 16, 
+                height: 3, 
+                background: 'rgba(16, 185, 129, 0.7)', 
+                position: 'relative',
+                borderRadius: '1px',
+                borderTop: '1px dashed rgba(16, 185, 129, 0.9)',
+                borderBottom: '1px dashed rgba(16, 185, 129, 0.9)'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  right: -2,
+                  top: -2,
+                  width: 0,
+                  height: 0,
+                  borderLeft: '4px solid rgba(16, 185, 129, 0.9)',
+                  borderTop: '3px solid transparent',
+                  borderBottom: '3px solid transparent'
+                }} />
+              </div>
+              <span>Ownership</span>
+            </LegendItem>
+          </>
+        )}
       </Legend>
       
       <Tooltip

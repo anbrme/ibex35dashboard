@@ -37,27 +37,27 @@ const pulse = keyframes`
 `;
 
 // Styled components
-const Container = styled.div<{ panelVisible: boolean }>`
-  min-height: 100vh;
+const Container = styled.div<{ $panelVisible: boolean }>`
+  height: 100vh;
   display: flex;
   background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 50%, #581c87 100%);
   transition: all 0.3s ease;
+  overflow: hidden;
 `;
 
-const LeftPanel = styled.div.withConfig({
-  shouldForwardProp: (prop) => !['isVisible', 'isFullscreen'].includes(prop as string)
-})<{ isVisible: boolean; isFullscreen: boolean }>`
-  width: ${props => props.isVisible ? '400px' : '0px'};
+const LeftPanel = styled.div<{ $isVisible: boolean; $isFullscreen: boolean }>`
+  width: ${props => props.$isVisible ? '400px' : '0px'};
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border-right: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   flex-direction: column;
-  box-shadow: ${props => props.isVisible ? '20px 0 40px rgba(0, 0, 0, 0.1)' : 'none'};
+  box-shadow: ${props => props.$isVisible ? '20px 0 40px rgba(0, 0, 0, 0.1)' : 'none'};
   min-height: 100vh;
   overflow: hidden;
   transition: all 0.3s ease;
-  opacity: ${props => props.isVisible ? 1 : 0};
+  opacity: ${props => props.$isVisible ? 1 : 0};
+  flex-shrink: 0;
 `;
 
 const Header = styled.div`
@@ -418,26 +418,31 @@ const RightPanel = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100vh;
   min-height: 100vh;
   position: relative;
+  overflow: hidden;
 `;
 
-const PanelToggle = styled.button<{ isVisible: boolean }>`
+const PanelToggle = styled.button<{ $isVisible: boolean }>`
   position: fixed;
-  top: 24px;
-  left: ${props => props.isVisible ? '416px' : '24px'};
+  top: 50%;
+  left: ${props => props.$isVisible ? '404px' : '4px'};
+  transform: translateY(-50%);
   z-index: 1000;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: ${props => props.$isVisible ? '0 12px 12px 0' : '0 8px 8px 0'};
+  padding: ${props => props.$isVisible ? '12px' : '8px 6px'};
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
   gap: 8px;
+  writing-mode: ${props => props.$isVisible ? 'horizontal-tb' : 'vertical-lr'};
+  text-orientation: ${props => props.$isVisible ? 'mixed' : 'mixed'};
   font-weight: 500;
   color: #374151;
   
@@ -448,7 +453,7 @@ const PanelToggle = styled.button<{ isVisible: boolean }>`
   }
 `;
 
-const CompanyCounter = styled.div<{ isVisible: boolean }>`
+const CompanyCounter = styled.div<{ $isVisible: boolean }>`
   position: fixed;
   top: 24px;
   right: 24px;
@@ -463,16 +468,17 @@ const CompanyCounter = styled.div<{ isVisible: boolean }>`
   font-size: 14px;
   box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
   transition: all 0.3s ease;
-  opacity: ${props => props.isVisible ? 1 : 0};
-  visibility: ${props => props.isVisible ? 'visible' : 'hidden'};
-  transform: ${props => props.isVisible ? 'translateY(0)' : 'translateY(-10px)'};
+  opacity: ${props => props.$isVisible ? 1 : 0};
+  visibility: ${props => props.$isVisible ? 'visible' : 'hidden'};
+  transform: ${props => props.$isVisible ? 'translateY(0)' : 'translateY(-10px)'};
 `;
 
 const MetricsBar = styled.div`
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 24px;
+  padding: 16px 24px;
+  flex-shrink: 0;
 `;
 
 const MetricsBarGrid = styled.div`
@@ -484,16 +490,17 @@ const MetricsBarGrid = styled.div`
 const MetricsBarCard = styled.div<{ color: string }>`
   background: ${props => `linear-gradient(135deg, ${props.color}10, ${props.color}20)`};
   border: 1px solid ${props => `${props.color}30`};
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 `;
 
 const ViewSelector = styled.div`
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 16px 24px;
+  padding: 12px 24px;
+  flex-shrink: 0;
 `;
 
 const ViewTabs = styled.div`
@@ -507,7 +514,7 @@ const ViewTab = styled.button.withConfig({
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 20px;
+  padding: 8px 16px;
   border: none;
   border-radius: 12px;
   font-size: 14px;
@@ -546,21 +553,23 @@ const TabDescription = styled.div`
 
 const VisualizationArea = styled.div`
   flex: 1;
-  padding: 24px;
-  min-height: 600px;
+  padding: 16px 24px 8px 24px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 `;
 
 const VisualizationCard = styled.div`
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 24px;
-  min-height: 500px;
+  border-radius: 16px;
+  padding: 20px;
+  flex: 1;
+  min-height: 0;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   flex-direction: column;
-  margin-bottom: 24px;
 `;
 
 const VisualizationTitle = styled.h2`
@@ -575,7 +584,8 @@ const TitleRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
 `;
 
 const AnalyticsToggle = styled.button<{ isActive: boolean }>`
@@ -601,7 +611,8 @@ const VisualizationContent = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 400px;
+  height: 100%;
+  overflow: hidden;
 `;
 
 const LoadingContainer = styled.div`
@@ -898,10 +909,10 @@ export function StyledDashboard() {
   return (
     <>
       <GlobalStyle />
-      <Container panelVisible={isPanelVisible}>
+      <Container $panelVisible={isPanelVisible}>
         {/* Panel Toggle Button */}
         <PanelToggle 
-          isVisible={isPanelVisible}
+          $isVisible={isPanelVisible}
           onClick={() => setIsPanelVisible(!isPanelVisible)}
         >
           {isPanelVisible ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
@@ -909,12 +920,12 @@ export function StyledDashboard() {
         </PanelToggle>
 
         {/* Company Counter (visible when panel is hidden) */}
-        <CompanyCounter isVisible={!isPanelVisible && selectedCompanyIds.size > 0}>
+        <CompanyCounter $isVisible={!isPanelVisible && selectedCompanyIds.size > 0}>
           {selectedCompanyIds.size} companies selected
         </CompanyCounter>
 
         {/* Left Panel */}
-        <LeftPanel isVisible={isPanelVisible} isFullscreen={false}>
+        <LeftPanel $isVisible={isPanelVisible} $isFullscreen={false}>
           <Header>
             <HeaderTitle>
               <IconWrapper>
