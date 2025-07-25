@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import styled from 'styled-components';
 import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Settings, Filter } from 'lucide-react';
@@ -398,24 +398,28 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     nodeData: null
   });
 
-  // Calculate network analytics
+  // Calculate network analytics only when companies change
   const networkAnalysis = useMemo(() => {
     if (!companies || companies.length === 0) return null;
+    console.log('🔄 Recalculating network analytics for', companies.length, 'companies');
     return networkAnalyticsService.calculateNetworkMetrics(companies);
   }, [companies]);
 
-  // Create autocomplete suggestions from all available names
+  // Create autocomplete suggestions from selected companies only for better performance
   const allNames = useMemo(() => {
+    if (selectedCompanyIds.size === 0) return [];
+    
     const names = new Set<string>();
+    const relevantCompanies = companies.filter(c => c && c.ticker && selectedCompanyIds.has(c.ticker));
     
     // Add company names
-    companies.forEach(company => {
+    relevantCompanies.forEach(company => {
       if (company.company) names.add(company.company);
       if (company.ticker) names.add(company.ticker);
     });
     
     // Add director names
-    companies.forEach(company => {
+    relevantCompanies.forEach(company => {
       if (company.directors) {
         company.directors.forEach(director => {
           if (director.name) names.add(director.name);
@@ -424,7 +428,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     });
     
     // Add shareholder names
-    companies.forEach(company => {
+    relevantCompanies.forEach(company => {
       if (company.shareholders) {
         company.shareholders.forEach(shareholder => {
           if (shareholder.name) names.add(shareholder.name);
@@ -432,8 +436,9 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       }
     });
     
+    console.log('🔍 Generated', names.size, 'autocomplete names from', relevantCompanies.length, 'companies');
     return Array.from(names).sort();
-  }, [companies]);
+  }, [companies, selectedCompanyIds]);
 
   // Handle search input and suggestions
   const handleSearchChange = (value: string) => {
@@ -457,11 +462,6 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     setShowSuggestions(false);
   };
 
-  // Check if a name matches search term
-  const matchesSearch = useCallback((name: string) => {
-    if (!searchTerm) return true;
-    return name.toLowerCase().includes(searchTerm.toLowerCase());
-  }, [searchTerm]);
 
   useEffect(() => {
     if (!containerRef.current || !companies || companies.length === 0) return;
@@ -470,6 +470,14 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     const relevantCompanies = selectedCompanyIds.size > 0 
       ? companies.filter(c => c && c.ticker && selectedCompanyIds.has(c.ticker))
       : []; // Show nothing if no companies are selected
+
+    console.log('🎯 Graph update triggered:', {
+      selectedCompanies: selectedCompanyIds.size,
+      relevantCompanies: relevantCompanies.length,
+      searchTerm,
+      minDirectorCompanies,
+      minShareholderPercentage
+    });
 
     if (relevantCompanies.length === 0) {
       // Clear the graph if no companies selected
@@ -599,7 +607,9 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     relevantCompanies.forEach(company => {
       if (company && company.ticker) {
         // Filter by search term
-        if (!matchesSearch(company.company || '') && !matchesSearch(company.ticker || '')) {
+        const companyName = company.company || '';
+        const ticker = company.ticker || '';
+        if (searchTerm && !companyName.toLowerCase().includes(searchTerm.toLowerCase()) && !ticker.toLowerCase().includes(searchTerm.toLowerCase())) {
           return; // Skip companies that don't match search
         }
         
@@ -634,7 +644,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       }
       
       // Filter by search term
-      if (!matchesSearch(director.name)) {
+      if (searchTerm && !director.name.toLowerCase().includes(searchTerm.toLowerCase())) {
         return; // Skip directors that don't match search
       }
       
@@ -691,7 +701,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       }
       
       // Filter by search term
-      if (!matchesSearch(shareholder.name)) {
+      if (searchTerm && !shareholder.name.toLowerCase().includes(searchTerm.toLowerCase())) {
         return; // Skip shareholders that don't match search
       }
       
@@ -1127,7 +1137,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         console.error('Cytoscape cleanup error:', error);
       }
     };
-  }, [companies, selectedCompanyIds, networkAnalysis, minDirectorCompanies, minShareholderPercentage, searchTerm, isFullscreen, currentLayout, matchesSearch]);
+  }, [companies, selectedCompanyIds, networkAnalysis, minDirectorCompanies, minShareholderPercentage, searchTerm, isFullscreen, currentLayout]);
 
   const handleZoomIn = () => {
     if (cyRef.current) {
