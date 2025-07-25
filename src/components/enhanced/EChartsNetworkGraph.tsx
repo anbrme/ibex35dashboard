@@ -27,6 +27,64 @@ interface NodeData {
   };
   companies?: string[];
 }
+
+// ECharts specific interfaces
+interface EChartsNode {
+  id: string;
+  name: string;
+  category: number;
+  symbolSize: number;
+  value?: number;
+  itemStyle?: {
+    color: string;
+  };
+  label?: {
+    show: boolean;
+    position: string;
+    fontSize: number;
+  };
+  companyData?: SecureIBEXCompanyData;
+  directorData?: {
+    name: string;
+    companyCount: number;
+    companies: string[];
+    allPositions: string[];
+    appointmentDate?: string;
+  };
+  shareholderData?: {
+    name: string;
+    type?: string;
+    totalPercentage: number;
+    percentage?: number;
+    shares?: number;
+    companies: string[];
+    reportDate?: string;
+  };
+}
+
+interface EChartsLink {
+  source: string;
+  target: string;
+  lineStyle?: {
+    color: string;
+    width: number;
+    opacity: number;
+  };
+}
+
+interface DirectorData {
+  name: string;
+  position?: string;
+  appointmentDate?: string;
+}
+
+interface ShareholderData {
+  name: string;
+  type?: string;
+  percentage: number;
+  shares?: number;
+  reportDate?: string;
+}
 // import { networkAnalyticsService } from '../../services/networkAnalytics';
 
 interface Props {
@@ -201,8 +259,8 @@ export function EChartsNetworkGraph({ companies, selectedCompanyIds }: Props) {
     // const analysis = networkAnalyticsService.calculateNetworkMetrics(relevantCompanies);
 
     // Create nodes and links for ECharts
-    const nodes: any[] = [];
-    const links: any[] = [];
+    const nodes: EChartsNode[] = [];
+    const links: EChartsLink[] = [];
     const categories = [
       { name: 'Company', itemStyle: { color: '#3b82f6' } },
       { name: 'Director', itemStyle: { color: '#7c3aed' } },
@@ -211,12 +269,12 @@ export function EChartsNetworkGraph({ companies, selectedCompanyIds }: Props) {
 
     // Track consolidated entities
     const directorsMap = new Map<string, {
-      director: any;
+      director: DirectorData;
       companies: Set<string>;
       allPositions: string[];
     }>();
     const shareholdersMap = new Map<string, {
-      shareholder: any;
+      shareholder: ShareholderData;
       companies: Set<string>;
       totalPercentage: number;
     }>();
@@ -401,7 +459,7 @@ export function EChartsNetworkGraph({ companies, selectedCompanyIds }: Props) {
     },
     tooltip: {
       trigger: 'item',
-      formatter: (params: any) => {
+      formatter: (params: { data: EChartsNode }) => {
         const { data } = params;
         if (data.companyData) {
           return `
@@ -457,7 +515,7 @@ export function EChartsNetworkGraph({ companies, selectedCompanyIds }: Props) {
         }
       },
       lineStyle: {
-        curveness: 0.1,
+        curveness: 0.1, // ECharts property name
         opacity: 0.8
       }
     }],
@@ -485,7 +543,7 @@ export function EChartsNetworkGraph({ companies, selectedCompanyIds }: Props) {
     return config;
   }, [chartData, currentLayout, repulsion, gravity, edgeLength, friction]);
 
-  const handleNodeClick = (params: any) => {
+  const handleNodeClick = (params: { data: EChartsNode }) => {
     const { data } = params;
     console.log('Node clicked - full data:', data);
     console.log('Node data fields:', {
@@ -608,21 +666,7 @@ export function EChartsNetworkGraph({ companies, selectedCompanyIds }: Props) {
         </GraphContainer>
       </Container>
     );
-  }
-
-  // Simple test option to verify ECharts is working
-  const testOption = {
-    title: { text: 'Test Chart' },
-    xAxis: { type: 'value' },
-    yAxis: { type: 'value' },
-    series: [{
-      type: 'scatter',
-      data: [[1, 2], [2, 3], [3, 4]]
-    }]
   };
-
-  console.log('About to render ReactECharts with option:', !!option);
-  console.log('Using test option temporarily');
 
   return (
     <Container isFullscreen={isFullscreen}>
