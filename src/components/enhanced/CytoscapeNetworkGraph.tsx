@@ -24,17 +24,11 @@ const Container = styled.div.withConfig({
   z-index: ${props => props.isFullscreen ? '9999' : 'auto'};
   border-radius: ${props => props.isFullscreen ? '0' : '16px'};
   overflow: hidden;
-  background: ${props => props.isFullscreen 
-    ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)' 
-    : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'};
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
   box-shadow: ${props => props.isFullscreen 
-    ? '0 0 50px rgba(0, 0, 0, 0.8)' 
+    ? '0 0 50px rgba(0, 0, 0, 0.3)' 
     : 'inset 0 2px 8px rgba(0, 0, 0, 0.1)'};
   transition: all 0.3s ease;
-  
-  ${props => props.isFullscreen && `
-    backdrop-filter: blur(10px);
-  `}
 `;
 
 const GraphContainer = styled.div`
@@ -117,20 +111,13 @@ const Legend = styled.div.withConfig({
   position: absolute;
   bottom: 16px;
   left: 16px;
-  background: ${props => props.isFullscreen 
-    ? 'rgba(0, 0, 0, 0.8)' 
-    : 'rgba(255, 255, 255, 0.95)'};
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-radius: 12px;
-  padding: ${props => props.isFullscreen ? '12px' : '16px'};
+  padding: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   z-index: 10;
-  transform: ${props => props.isFullscreen ? 'scale(0.9)' : 'scale(1)'};
   transition: all 0.3s ease;
-  
-  ${props => props.isFullscreen && `
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  `}
 `;
 
 const LegendTitle = styled.h4.withConfig({
@@ -139,8 +126,7 @@ const LegendTitle = styled.h4.withConfig({
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: ${props => props.isFullscreen ? '#ffffff' : '#1f2937'};
-  transition: color 0.3s ease;
+  color: #1f2937;
 `;
 
 const LegendItem = styled.div.withConfig({
@@ -151,8 +137,7 @@ const LegendItem = styled.div.withConfig({
   gap: 8px;
   margin-bottom: 8px;
   font-size: 12px;
-  color: ${props => props.isFullscreen ? '#e5e7eb' : '#374151'};
-  transition: color 0.3s ease;
+  color: #374151;
   
   &:last-child {
     margin-bottom: 0;
@@ -166,6 +151,27 @@ const LegendDot = styled.div<{ color: string; size?: number }>`
   background: ${props => props.color};
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
+`;
+
+const FilterNotice = styled.div`
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(59, 130, 246, 0.95);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 400px;
+  text-align: center;
 `;
 
 export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) {
@@ -218,6 +224,11 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     return networkAnalyticsService.calculateNetworkMetrics(companies);
   }, [companies]);
 
+  // Calculate filtering flags based on complexity
+  const numCompanies = selectedCompanyIds.size;
+  const shouldFilterDirectors = numCompanies > 15;
+  const shouldFilterShareholders = numCompanies > 20;
+
   useEffect(() => {
     if (!containerRef.current || !companies || companies.length === 0) return;
 
@@ -240,10 +251,10 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     let hasValidElements = false;
 
     // Calculate node sizes based on number of companies and network metrics
-    const numCompanies = relevantCompanies.length;
-    const baseCompanySize = Math.max(30, Math.min(60, 200 / Math.sqrt(numCompanies)));
-    const baseDirectorSize = Math.max(20, Math.min(40, 150 / Math.sqrt(numCompanies)));
-    const baseShareholderSize = Math.max(15, Math.min(35, 120 / Math.sqrt(numCompanies)));
+    const relevantCompaniesCount = relevantCompanies.length;
+    const baseCompanySize = Math.max(30, Math.min(60, 200 / Math.sqrt(relevantCompaniesCount)));
+    const baseDirectorSize = Math.max(20, Math.min(40, 150 / Math.sqrt(relevantCompaniesCount)));
+    const baseShareholderSize = Math.max(15, Math.min(35, 120 / Math.sqrt(relevantCompaniesCount)));
 
     // Helper function to get enhanced node size based on metrics
     const getEnhancedNodeSize = (baseSize: number, nodeId: string): number => {
@@ -372,11 +383,16 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       }
     });
 
-    // Add consolidated director nodes
+    // Add consolidated director nodes (with smart filtering for complex networks)
     directorsMap.forEach((directorData, directorKey) => {
       const directorId = `dir_${directorKey.replace(/[^a-z0-9]/g, '_')}`;
       const director = directorData.director;
       const companyCount = directorData.companies.size;
+      
+      // Filter directors for complex networks: only show cross-board directors (serving multiple companies)
+      if (shouldFilterDirectors && companyCount <= 1) {
+        return; // Skip directors who only serve on one board
+      }
       
       // Base color and size
       const baseColor = companyCount > 1 ? '#7c3aed' : '#8b5cf6';
@@ -418,11 +434,17 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       });
     });
 
-    // Add consolidated shareholder nodes
+    // Add consolidated shareholder nodes (with smart filtering for complex networks)
     shareholdersMap.forEach((shareholderData, shareholderKey) => {
       const shareholderId = `shr_${shareholderKey.replace(/[^a-z0-9]/g, '_')}`;
       const shareholder = shareholderData.shareholder;
       const companyCount = shareholderData.companies.size;
+      const totalPercentage = shareholderData.totalPercentage;
+      
+      // Filter shareholders for complex networks: only show major shareholders (>3% or cross-company)
+      if (shouldFilterShareholders && companyCount <= 1 && totalPercentage < 3) {
+        return; // Skip minor shareholders
+      }
       
       // Base color and size
       const baseColor = companyCount > 1 ? '#059669' : '#10b981';
@@ -850,7 +872,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         console.error('Cytoscape cleanup error:', error);
       }
     };
-  }, [companies, selectedCompanyIds, networkAnalysis]);
+  }, [companies, selectedCompanyIds, networkAnalysis, shouldFilterDirectors, shouldFilterShareholders, isFullscreen]);
 
   const handleZoomIn = () => {
     if (cyRef.current) {
@@ -928,6 +950,12 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
   return (
     <Container isFullscreen={isFullscreen}>
       <GraphContainer ref={containerRef} />
+      
+      {(shouldFilterDirectors || shouldFilterShareholders) && (
+        <FilterNotice>
+          💡 Network simplified: {shouldFilterDirectors ? 'showing cross-board directors only' : ''}{shouldFilterDirectors && shouldFilterShareholders ? ' • ' : ''}{shouldFilterShareholders ? 'showing major shareholders (>3%) only' : ''}
+        </FilterNotice>
+      )}
       
       <Controls>
         <ControlButton onClick={handleZoomIn} title="Zoom In">

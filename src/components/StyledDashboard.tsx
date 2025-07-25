@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import styled, { createGlobalStyle, keyframes } from 'styled-components';
-import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, DollarSign, ArrowUp, ArrowDown, Percent } from 'lucide-react';
+import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, DollarSign, ArrowUp, ArrowDown, Percent, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
 import { CytoscapeNetworkGraph } from './enhanced/CytoscapeNetworkGraph';
 import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
@@ -41,15 +41,22 @@ const Container = styled.div`
   background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 50%, #581c87 100%);
 `;
 
-const LeftPanel = styled.div`
-  width: 400px;
+const LeftPanel = styled.div.withConfig({
+  shouldForwardProp: (prop) => !['isVisible', 'isFullscreen'].includes(prop as string)
+})<{ isVisible: boolean; isFullscreen: boolean }>`
+  width: ${props => props.isVisible ? '400px' : '0px'};
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border-right: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   flex-direction: column;
-  box-shadow: 20px 0 40px rgba(0, 0, 0, 0.1);
+  box-shadow: ${props => props.isVisible ? '20px 0 40px rgba(0, 0, 0, 0.1)' : 'none'};
   min-height: 100vh;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  transform: ${props => props.isVisible ? 'translateX(0)' : 'translateX(-100%)'};
+  opacity: ${props => props.isVisible ? 1 : 0};
+  visibility: ${props => props.isVisible ? 'visible' : 'hidden'};
 `;
 
 const Header = styled.div`
@@ -411,6 +418,53 @@ const RightPanel = styled.div`
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  position: relative;
+`;
+
+const PanelToggle = styled.button<{ isVisible: boolean }>`
+  position: fixed;
+  top: 24px;
+  left: ${props => props.isVisible ? '416px' : '24px'};
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #374151;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 1);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  }
+`;
+
+const CompanyCounter = styled.div<{ isVisible: boolean }>`
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 1000;
+  background: rgba(59, 130, 246, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  padding: 8px 16px;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+  transition: all 0.3s ease;
+  opacity: ${props => props.isVisible ? 1 : 0};
+  visibility: ${props => props.isVisible ? 'visible' : 'hidden'};
+  transform: ${props => props.isVisible ? 'translateY(0)' : 'translateY(-10px)'};
 `;
 
 const MetricsBar = styled.div`
@@ -670,6 +724,7 @@ export function StyledDashboard() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string>('');
+  const [isPanelVisible, setIsPanelVisible] = useState(true);
 
   useEffect(() => {
     fetchData();
@@ -804,12 +859,27 @@ export function StyledDashboard() {
     );
   }
   
+
   return (
     <>
       <GlobalStyle />
       <Container>
+        {/* Panel Toggle Button */}
+        <PanelToggle 
+          isVisible={isPanelVisible}
+          onClick={() => setIsPanelVisible(!isPanelVisible)}
+        >
+          {isPanelVisible ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+          {isPanelVisible ? 'Hide Panel' : 'Show Companies'}
+        </PanelToggle>
+
+        {/* Company Counter (visible when panel is hidden) */}
+        <CompanyCounter isVisible={!isPanelVisible && selectedCompanyIds.size > 0}>
+          {selectedCompanyIds.size} companies selected
+        </CompanyCounter>
+
         {/* Left Panel */}
-        <LeftPanel>
+        <LeftPanel isVisible={isPanelVisible} isFullscreen={false}>
           <Header>
             <HeaderTitle>
               <IconWrapper>
