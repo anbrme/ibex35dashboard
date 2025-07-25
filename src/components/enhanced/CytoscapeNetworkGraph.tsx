@@ -24,11 +24,17 @@ const Container = styled.div.withConfig({
   z-index: ${props => props.isFullscreen ? '9999' : 'auto'};
   border-radius: ${props => props.isFullscreen ? '0' : '16px'};
   overflow: hidden;
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  background: ${props => props.isFullscreen 
+    ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)' 
+    : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'};
   box-shadow: ${props => props.isFullscreen 
-    ? '0 0 50px rgba(0, 0, 0, 0.3)' 
+    ? '0 0 50px rgba(0, 0, 0, 0.8)' 
     : 'inset 0 2px 8px rgba(0, 0, 0, 0.1)'};
   transition: all 0.3s ease;
+  
+  ${props => props.isFullscreen && `
+    backdrop-filter: blur(10px);
+  `}
 `;
 
 const GraphContainer = styled.div`
@@ -105,31 +111,48 @@ const Tooltip = styled.div.withConfig({
   }
 `;
 
-const Legend = styled.div`
+const Legend = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isFullscreen'
+})<{ isFullscreen: boolean }>`
   position: absolute;
   bottom: 16px;
   left: 16px;
-  background: rgba(255, 255, 255, 0.95);
+  background: ${props => props.isFullscreen 
+    ? 'rgba(0, 0, 0, 0.8)' 
+    : 'rgba(255, 255, 255, 0.95)'};
   backdrop-filter: blur(10px);
   border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  padding: ${props => props.isFullscreen ? '12px' : '16px'};
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   z-index: 10;
+  transform: ${props => props.isFullscreen ? 'scale(0.9)' : 'scale(1)'};
+  transition: all 0.3s ease;
+  
+  ${props => props.isFullscreen && `
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  `}
 `;
 
-const LegendTitle = styled.h4`
+const LegendTitle = styled.h4.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isFullscreen'
+})<{ isFullscreen: boolean }>`
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: ${props => props.isFullscreen ? '#ffffff' : '#1f2937'};
+  transition: color 0.3s ease;
 `;
 
-const LegendItem = styled.div`
+const LegendItem = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isFullscreen'
+})<{ isFullscreen: boolean }>`
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
   font-size: 12px;
+  color: ${props => props.isFullscreen ? '#e5e7eb' : '#374151'};
+  transition: color 0.3s ease;
   
   &:last-child {
     margin-bottom: 0;
@@ -449,13 +472,20 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
 
     console.log(`🔍 Cytoscape initializing with ${elements.length} elements:`, elements.map(e => ({ id: e.data.id, type: e.data.type })));
 
-    // Adjust layout parameters based on graph complexity
+    // Adjust layout parameters based on graph complexity and container size
     const totalNodes = elements.filter(e => !e.data.source).length;
-    const idealEdgeLength = Math.max(20, Math.min(50, 300 / Math.sqrt(totalNodes)));
-    const nodeRepulsion = Math.max(1000, Math.min(4000, 8000 / Math.sqrt(totalNodes)));
+    const containerArea = containerRef.current ? 
+      containerRef.current.offsetWidth * containerRef.current.offsetHeight : 
+      800 * 600;
+    
+    // Dynamic spacing based on available space and number of nodes
+    const optimalSpacing = Math.sqrt(containerArea / totalNodes);
+    const idealEdgeLength = Math.max(40, Math.min(120, optimalSpacing * 0.8));
+    const nodeRepulsion = Math.max(2000, Math.min(8000, optimalSpacing * 30));
+    const padding = isFullscreen ? 30 : 40;
 
     // Initialize Cytoscape with error handling
-    let cy;
+    let cy: Core;
     try {
       cy = cytoscape({
       container: containerRef.current,
@@ -467,21 +497,24 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             'width': 'data(size)',
             'height': 'data(size)',
             'background-color': 'data(color)',
-            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTMgN1YxN0EyIDIgMCAwIDAgNSAxOUgxOUEyIDIgMCAwIDAgMjEgMTdWN00zIDdMMTIgMTNMMjEgN00zIDdMNSA1SDE5TDIxIDdaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K',
+            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTMgMjFoMThWOUgzdjEyem0yLTE4aDJWMWgydjJoOFYxaDJ2Mkg3djJ6IiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMC41Ii8+CjxwYXRoIGQ9Ik01IDExaDJ2Mkg1di0yem0wIDRoMnYySDV2LTJ6bTQtNGgydjJIOXYtMnptMCA0aDJ2Mkg5di0yem00LTRoMnYyaC0ydi0yem0wIDRoMnYyaC0ydi0yem00LTRoMnYyaC0ydi0yem0wIDRoMnYyaC0ydi0yeiIgZmlsbD0iIzMzMzMzMyIvPgo8L3N2Zz4K',
             'background-fit': 'contain',
             'background-position-x': '50%',
             'background-position-y': '50%',
-            'background-width': '60%',
-            'background-height': '60%',
+            'background-width': '70%',
+            'background-height': '70%',
             'label': 'data(label)',
             'text-valign': 'bottom',
             'text-halign': 'center',
-            'text-margin-y': 8,
+            'text-margin-y': 10,
             'color': '#1f2937',
-            'font-size': 12,
-            'font-weight': 600,
+            'font-size': 13,
+            'font-weight': 700,
             'font-family': 'Inter, sans-serif',
-            'border-width': 3,
+            'text-background-color': 'rgba(255, 255, 255, 0.9)',
+            'text-background-padding': '3px',
+            'text-background-shape': 'roundrectangle',
+            'border-width': 4,
             'border-color': '#ffffff',
             'border-opacity': 1,
             'z-index': 10
@@ -493,21 +526,24 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             'width': 'data(size)',
             'height': 'data(size)',
             'background-color': 'data(color)',
-            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIwIDIxVjE5QTQgNCAwIDAgMCAxNiAxNUg4QTQgNCAwIDAgMCA0IDE5VjIxTTEyIDExQTQgNCAwIDEgMCAxMiAzQTQgNCAwIDAgMCAxMiAxMVoiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=',
+            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSI4IiByPSI0IiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiMzMzMzMzMiIHN0cm9rZS13aWR0aD0iMC41Ii8+CjxwYXRoIGQ9Ik00IDIwYzAtNCAxLjc5LTcuNSA4LTcuNXM4IDMuNSA4IDcuNSIgZmlsbD0iIzMzMzMzMyIvPgo8cGF0aCBkPSJNNCAyMGMwLTQgMy41OC04IDgtOHM4IDQgOCA4IiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMC41IiBmaWxsPSJub25lIi8+Cjwvc3ZnPgo=',
             'background-fit': 'contain',
             'background-position-x': '50%',
             'background-position-y': '50%',
-            'background-width': '60%',
-            'background-height': '60%',
+            'background-width': '75%',
+            'background-height': '75%',
             'label': 'data(label)',
             'text-valign': 'bottom',
             'text-halign': 'center',
-            'text-margin-y': 6,
+            'text-margin-y': 8,
             'color': '#1f2937',
-            'font-size': 10,
-            'font-weight': 500,
+            'font-size': 11,
+            'font-weight': 600,
             'font-family': 'Inter, sans-serif',
-            'border-width': 2,
+            'text-background-color': 'rgba(255, 255, 255, 0.8)',
+            'text-background-padding': '2px',
+            'text-background-shape': 'roundrectangle',
+            'border-width': 3,
             'border-color': '#ffffff',
             'border-opacity': 1,
             'z-index': 5
@@ -519,21 +555,25 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             'width': 'data(size)',
             'height': 'data(size)',
             'background-color': 'data(color)',
-            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K',
+            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJsMS41IDYuNSA2LjUgMS01IDUgNSA1LTYuNSAxLjUtMS41IDYuNS0xLjUtNi41LTYuNS0xLjUgNS01LTUtNSA2LjUtMS41TDEyIDJ6IiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiMzMzMzMzMiIHN0cm9rZS13aWR0aD0iMSIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIzIiBmaWxsPSIjMzMzMzMzIi8+Cjwvc3ZnPg==',
             'background-fit': 'contain',
             'background-position-x': '50%',
             'background-position-y': '50%',
-            'background-width': '60%',
-            'background-height': '60%',
+            'background-width': '70%',
+            'background-height': '70%',
             'label': 'data(label)',
             'text-valign': 'bottom',
             'text-halign': 'center',
-            'text-margin-y': 5,
+            'text-margin-y': 7,
             'color': '#1f2937',
-            'font-size': 9,
-            'font-weight': 500,
+            'font-size': 10,
+            'font-weight': 600,
             'font-family': 'Inter, sans-serif',
-            'border-width': 2,
+            'text-background-color': 'rgba(255, 255, 255, 0.8)',
+            'text-background-padding': '2px',
+            'text-background-shape': 'roundrectangle',
+            'shape': 'diamond',
+            'border-width': 3,
             'border-color': '#ffffff',
             'border-opacity': 1,
             'z-index': 3
@@ -542,12 +582,29 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         {
           selector: 'edge',
           style: {
-            'width': 2,
-            'line-color': 'rgba(100, 116, 139, 0.4)',
-            'target-arrow-color': 'rgba(100, 116, 139, 0.6)',
+            'width': 3,
+            'line-color': 'rgba(59, 130, 246, 0.6)',
+            'target-arrow-color': 'rgba(59, 130, 246, 0.8)',
             'target-arrow-shape': 'triangle',
             'curve-style': 'straight',
-            'z-index': 1
+            'z-index': 1,
+            'opacity': 0.8
+          }
+        },
+        {
+          selector: 'edge[type="board_member"]',
+          style: {
+            'line-color': 'rgba(139, 92, 246, 0.7)',
+            'target-arrow-color': 'rgba(139, 92, 246, 0.9)',
+            'line-style': 'solid'
+          }
+        },
+        {
+          selector: 'edge[type="shareholder"]',
+          style: {
+            'line-color': 'rgba(16, 185, 129, 0.7)',
+            'target-arrow-color': 'rgba(16, 185, 129, 0.9)',
+            'line-style': 'dashed'
           }
         },
         {
@@ -580,21 +637,24 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       layout: {
         name: 'cose',
         animate: true,
-        animationDuration: 1500,
+        animationDuration: 2000,
+        animationEasing: 'ease-out',
         fit: true,
-        padding: 50,
-        componentSpacing: 40,
-        nodeOverlap: 4,
+        padding: padding,
+        componentSpacing: Math.max(60, idealEdgeLength * 1.5),
+        nodeOverlap: 8,
         idealEdgeLength: idealEdgeLength,
-        edgeElasticity: 16,
+        edgeElasticity: 32,
         nestingFactor: 1.2,
-        gravity: Math.min(1, 2 / Math.sqrt(totalNodes)),
-        numIter: Math.min(1000, Math.max(500, totalNodes * 2)),
-        initialTemp: 1000,
-        coolingFactor: 0.99,
+        gravity: Math.max(0.25, Math.min(0.8, 1.5 / Math.sqrt(totalNodes))),
+        numIter: Math.min(1500, Math.max(800, totalNodes * 3)),
+        initialTemp: 2000,
+        coolingFactor: 0.95,
         minTemp: 1.0,
         nodeRepulsion: nodeRepulsion,
-        randomize: false
+        randomize: false,
+        avoidOverlap: true,
+        refresh: 20,
       },
       zoom: 1,
       pan: { x: 0, y: 0 },
@@ -632,7 +692,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     });
 
     // Event handlers
-    cy.on('mouseover', 'node', (event) => {
+    cy.on('mouseover', 'node', (event: any) => {
       const node = event.target;
       const data = node.data();
       const position = node.renderedPosition();
@@ -724,7 +784,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       });
     });
 
-    cy.on('mouseout', 'node', (event) => {
+    cy.on('mouseout', 'node', (event: any) => {
       const node = event.target;
       
       // Remove hover effect unless highlighted
@@ -745,7 +805,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       setTooltip(prev => ({ ...prev, visible: false }));
     });
 
-    cy.on('tap', 'node', (event) => {
+    cy.on('tap', 'node', (event: any) => {
       const node = event.target;
       cy.elements().removeClass('highlighted');
       
@@ -774,7 +834,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       });
     });
 
-    cy.on('tap', (event) => {
+    cy.on('tap', (event: any) => {
       if (event.target === cy) {
         cy.elements().removeClass('highlighted');
       }
@@ -818,27 +878,39 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
   };
 
   const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-    // Resize cytoscape after fullscreen toggle
+    const newFullscreenState = !isFullscreen;
+    setIsFullscreen(newFullscreenState);
+    
+    // Manage body scroll
+    if (newFullscreenState) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    
+    // Longer delay to ensure DOM changes are complete
     setTimeout(() => {
-      if (cyRef.current) {
+      if (cyRef.current && !cyRef.current.destroyed()) {
         cyRef.current.resize();
         cyRef.current.fit();
+        cyRef.current.center();
       }
-    }, 300);
+    }, 400);
   };
 
-  // Add keyboard support for fullscreen
+  // Add keyboard support for fullscreen and cleanup body styles
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isFullscreen) {
         setIsFullscreen(false);
+        document.body.style.overflow = 'auto';
         setTimeout(() => {
-          if (cyRef.current) {
+          if (cyRef.current && !cyRef.current.destroyed()) {
             cyRef.current.resize();
             cyRef.current.fit();
+            cyRef.current.center();
           }
-        }, 300);
+        }, 400);
       }
     };
 
@@ -846,6 +918,11 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
+    
+    // Cleanup body styles on component unmount
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
   }, [isFullscreen]);
 
   return (
@@ -870,47 +947,83 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         </ControlButton>
       </Controls>
       
-      <Legend>
-        <LegendTitle>Network Legend</LegendTitle>
-        <LegendItem>
+      <Legend isFullscreen={isFullscreen}>
+        <LegendTitle isFullscreen={isFullscreen}>Network Legend</LegendTitle>
+        <LegendItem isFullscreen={isFullscreen}>
           <LegendDot color="#3b82f6" size={16} />
           <span>Companies</span>
         </LegendItem>
-        <LegendItem>
+        <LegendItem isFullscreen={isFullscreen}>
           <LegendDot color="#8b5cf6" size={12} />
           <span>Directors</span>
         </LegendItem>
-        <LegendItem>
+        <LegendItem isFullscreen={isFullscreen}>
           <LegendDot color="#7c3aed" size={14} />
           <span>Cross-board Directors</span>
         </LegendItem>
-        <LegendItem>
-          <LegendDot color="#10b981" size={10} />
+        <LegendItem isFullscreen={isFullscreen}>
+          <div style={{ 
+            width: 10, 
+            height: 10, 
+            background: '#10b981', 
+            transform: 'rotate(45deg)',
+            borderRadius: '2px'
+          }} />
           <span>Shareholders</span>
         </LegendItem>
-        <LegendItem>
-          <LegendDot color="#059669" size={12} />
-          <span>Cross-company Shareholders</span>
+        <LegendItem isFullscreen={isFullscreen}>
+          <div style={{ 
+            width: 12, 
+            height: 12, 
+            background: '#059669', 
+            transform: 'rotate(45deg)',
+            borderRadius: '2px'
+          }} />
+          <span>Major Shareholders</span>
         </LegendItem>
-        <LegendItem>
+        <LegendItem isFullscreen={isFullscreen}>
           <div style={{ 
             width: 16, 
-            height: 2, 
-            background: 'rgba(100, 116, 139, 0.4)', 
-            position: 'relative' 
+            height: 3, 
+            background: 'rgba(139, 92, 246, 0.7)', 
+            position: 'relative',
+            borderRadius: '1px'
           }}>
             <div style={{
               position: 'absolute',
               right: -2,
-              top: -3,
+              top: -2,
               width: 0,
               height: 0,
-              borderLeft: '4px solid rgba(100, 116, 139, 0.6)',
-              borderTop: '4px solid transparent',
-              borderBottom: '4px solid transparent'
+              borderLeft: '4px solid rgba(139, 92, 246, 0.9)',
+              borderTop: '3px solid transparent',
+              borderBottom: '3px solid transparent'
             }} />
           </div>
           <span>Board Membership</span>
+        </LegendItem>
+        <LegendItem isFullscreen={isFullscreen}>
+          <div style={{ 
+            width: 16, 
+            height: 3, 
+            background: 'rgba(16, 185, 129, 0.7)', 
+            position: 'relative',
+            borderRadius: '1px',
+            borderTop: '1px dashed rgba(16, 185, 129, 0.9)',
+            borderBottom: '1px dashed rgba(16, 185, 129, 0.9)'
+          }}>
+            <div style={{
+              position: 'absolute',
+              right: -2,
+              top: -2,
+              width: 0,
+              height: 0,
+              borderLeft: '4px solid rgba(16, 185, 129, 0.9)',
+              borderTop: '3px solid transparent',
+              borderBottom: '3px solid transparent'
+            }} />
+          </div>
+          <span>Ownership</span>
         </LegendItem>
       </Legend>
       
