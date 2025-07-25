@@ -34,6 +34,8 @@ export default {
       return handleSyncStatus(db);
     } else if (path === '/api/debug') {
       return handleDebug(env);
+    } else if (path === '/api/test-shareholders') {
+      return handleTestShareholders(env);
     }
 
     // Default: return companies (backward compatibility)
@@ -75,6 +77,10 @@ export default {
       // Fetch fresh data from Google Sheets
       const companiesData = await fetchFromGoogleSheets(env);
       
+      // Debug: Check if companies have shareholders data
+      const companiesWithShareholders = companiesData.filter(c => c.shareholders && c.shareholders.length > 0);
+      console.log(`📊 Scheduled sync - Companies with shareholders data: ${companiesWithShareholders.length}/${companiesData.length}`);
+      
       // Sync to D1
       const companiesResult = await db.syncCompaniesData(companiesData);
       const directorsResult = await db.syncDirectorsData(companiesData);
@@ -85,7 +91,8 @@ export default {
       
       console.log('✅ Scheduled sync completed:', {
         companies: companiesResult.recordsProcessed,
-        directors: directorsResult.peopleProcessed
+        directors: directorsResult.peopleProcessed,
+        shareholders: shareholdersResult?.shareholdersProcessed || 0
       });
 
       // Optional: Send notification or log to external service
@@ -154,10 +161,25 @@ async function handleDataSync(db, env, request) {
     // Fetch fresh data from Google Sheets
     const companiesData = await fetchFromGoogleSheets(env);
     
+    // Debug: Check if companies have shareholders data
+    const companiesWithShareholders = companiesData.filter(c => c.shareholders && c.shareholders.length > 0);
+    console.log(`📊 Companies with shareholders data: ${companiesWithShareholders.length}/${companiesData.length}`);
+    if (companiesWithShareholders.length > 0) {
+      console.log(`📊 First company with shareholders:`, companiesWithShareholders[0].company, companiesWithShareholders[0].shareholders.length, 'shareholders');
+    }
+    
     // Sync to D1
     const companiesResult = await db.syncCompaniesData(companiesData);
     const directorsResult = await db.syncDirectorsData(companiesData);
-    const shareholdersResult = await db.syncShareholdersData(companiesData);
+    
+    let shareholdersResult;
+    try {
+      shareholdersResult = await db.syncShareholdersData(companiesData);
+      console.log('📊 Shareholders sync result:', shareholdersResult);
+    } catch (error) {
+      console.error('❌ Shareholders sync error:', error);
+      shareholdersResult = { error: error.message, shareholdersProcessed: 0 };
+    }
     
     // Log sync operation
     await db.logSyncOperation('full_sync', companiesData.length, 'completed');
@@ -242,11 +264,42 @@ async function handleDebug(env) {
     console.log('📊 Testing larger range fetch...');
     const testData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A1:L3');
     
+    // Also test Shareholders sheet access with multiple attempts
+    console.log('📊 Testing Shareholders sheet access...');
+    const shareholdersTests = [];
+    const testRanges = [
+      'Shareholders!A1:D',
+      'Shareholders!A2:D', 
+      'Sheet3!A1:D5',
+      'Sheet3!A2:D5'
+    ];
+    
+    for (const range of testRanges) {
+      try {
+        const data = await fetchGoogleSheetsData(SHEET_ID, accessToken, range);
+        shareholdersTests.push({
+          range,
+          success: true,
+          rows: data.values?.length || 0,
+          sampleData: data.values?.slice(0, 2)
+        });
+        console.log(`✅ ${range}: ${data.values?.length || 0} rows`);
+      } catch (error) {
+        shareholdersTests.push({
+          range,
+          success: false,
+          error: error.message
+        });
+        console.log(`❌ ${range}: ${error.message}`);
+      }
+    }
+    
     return new Response(JSON.stringify({
       success: true,
       debug: {
         environment: envCheck,
         testData: testData.values || [],
+        shareholdersTests: shareholdersTests,
         message: 'Google Sheets access working'
       },
       timestamp: new Date().toISOString()
@@ -260,6 +313,71 @@ async function handleDebug(env) {
   } catch (error) {
     console.error('🐛 Debug error:', error);
     return createErrorResponse(`Debug failed: ${error.message}`, 500);
+  }
+}
+
+// Handle /api/test-shareholders endpoint - dedicated shareholders testing
+async function handleTestShareholders(env) {
+  try {
+    console.log('🔍 Testing shareholders sheet access...');
+    
+    const SERVICE_ACCOUNT_EMAIL = env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const PRIVATE_KEY = env.GOOGLE_PRIVATE_KEY;
+    const SHEET_ID = env.GOOGLE_SHEET_ID;
+    
+    if (!SERVICE_ACCOUNT_EMAIL || !PRIVATE_KEY || !SHEET_ID) {
+      return createErrorResponse('Missing environment variables', 500);
+    }
+    
+    const jwt = await createServiceAccountJWT(SERVICE_ACCOUNT_EMAIL, PRIVATE_KEY);
+    const accessToken = await getAccessToken(jwt);
+    
+    const testResults = [];
+    const attemptRanges = [
+      'Shareholders!A1:D',
+      'Shareholders!A2:D', 
+      'Sheet3!A1:D',
+      'Sheet3!A2:D',
+      'Shareholders!A:D',
+      'Sheet3!A:D'
+    ];
+    
+    for (const range of attemptRanges) {
+      try {
+        console.log(`🔍 Testing range: ${range}`);
+        const data = await fetchGoogleSheetsData(SHEET_ID, accessToken, range);
+        testResults.push({
+          range,
+          success: true,
+          rows: data.values?.length || 0,
+          data: data.values?.slice(0, 3) || [] // First 3 rows only
+        });
+        console.log(`✅ Success with ${range}: ${data.values?.length || 0} rows`);
+        break; // Stop at first success
+      } catch (error) {
+        testResults.push({
+          range,
+          success: false,
+          error: error.message
+        });
+        console.log(`❌ Failed with ${range}: ${error.message}`);
+      }
+    }
+    
+    return new Response(JSON.stringify({
+      success: true,
+      testResults,
+      timestamp: new Date().toISOString()
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
+    });
+    
+  } catch (error) {
+    console.error('🐛 Test shareholders error:', error);
+    return createErrorResponse(`Test failed: ${error.message}`, 500);
   }
 }
 
@@ -356,7 +474,10 @@ async function fetchFromGoogleSheets(env) {
       'Shareholders!A1:D', 
       'Shareholders!A:D',
       "'Shareholders'!A2:D",  // With quotes
-      'Sheet3!A2:D'           // Try by position
+      'Sheet3!A2:D',          // Try by position
+      'Sheet3!A1:D',          // Try by position with header
+      'Shareholders!A2:Z',    // Wider range in case more columns
+      'Sheet3!A2:Z'           // Wider range by position
     ];
     
     for (let i = 0; i < shareholdersAttempts.length; i++) {
@@ -364,7 +485,11 @@ async function fetchFromGoogleSheets(env) {
       try {
         console.log(`🔍 Attempting to fetch shareholders with range: ${range}`);
         shareholdersData = await fetchGoogleSheetsData(SHEET_ID, accessToken, range);
-        console.log(`✅ Successfully fetched shareholders with range: ${range}`);
+        console.log(`✅ Successfully fetched shareholders with range: ${range}, rows: ${shareholdersData.values?.length || 0}`);
+        if (shareholdersData.values?.length > 0) {
+          console.log(`📊 First shareholder row:`, shareholdersData.values[0]);
+          console.log(`📊 Second shareholder row:`, shareholdersData.values[1]);
+        }
         break;
       } catch (error) {
         console.warn(`⚠️ Failed to fetch with range ${range}:`, error.message);
@@ -591,12 +716,19 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
   const shareholdersByCompany = {};
   shareholderRows.forEach((row, index) => {
     try {
-      const companyName = row[0]?.trim();
+      const companyName = row[0]?.trim(); // Company
       const shareholder = {
-        name: row[1] || '',
-        percentage: parseFloat(row[2]) || 0,
-        date: row[3] || ''
+        name: row[1] || '', // Significant Shareholder  
+        percentage: parseFloat(row[2]) || 0, // Ownership_percentage
+        date: row[3] || '' // Date
       };
+      
+      console.log(`📊 Processing shareholder row ${index + 1}:`, {
+        companyName,
+        shareholderName: shareholder.name,
+        percentage: shareholder.percentage,
+        date: shareholder.date
+      });
       
       if (companyName && shareholder.name) {
         if (!shareholdersByCompany[companyName]) {
@@ -611,6 +743,12 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
   
   console.log(`📊 Processed shareholders for ${Object.keys(shareholdersByCompany).length} companies`);
   console.log(`📋 Shareholder company names found:`, Object.keys(shareholdersByCompany));
+  
+  // Debug: Log first few shareholder entries
+  if (Object.keys(shareholdersByCompany).length > 0) {
+    const firstCompany = Object.keys(shareholdersByCompany)[0];
+    console.log(`📊 Sample shareholders for ${firstCompany}:`, JSON.stringify(shareholdersByCompany[firstCompany], null, 2));
+  }
   
   // Process companies and match with directors
   const companies = companyRows
