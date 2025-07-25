@@ -122,8 +122,8 @@ export class DatabaseService {
     try {
       const shareholdersStmt = this.db.prepare(`
         INSERT OR REPLACE INTO company_shareholders (
-          id, company_id, name, type, percentage, shares, report_date, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          id, company_id, ticker, name, type, percentage, shares, report_date, is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const allShareholders = [];
@@ -137,6 +137,7 @@ export class DatabaseService {
             allShareholders.push({
               id: shareholderId,
               companyId: company.ticker,
+              ticker: company.ticker,
               name: shareholder.name,
               type: this.determineShareholderType(shareholder.name),
               percentage: parseFloat(shareholder.percentage) || 0,
@@ -155,6 +156,7 @@ export class DatabaseService {
           shareholdersStmt.bind(
             shareholder.id,
             shareholder.companyId,
+            shareholder.ticker,
             shareholder.name,
             shareholder.type,
             shareholder.percentage,

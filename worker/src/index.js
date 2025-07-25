@@ -468,14 +468,14 @@ async function fetchFromGoogleSheets(env) {
     console.log('📊 Fetching shareholders from Shareholders sheet...');
     let shareholdersData;
     
-    // Try multiple approaches to access the Shareholders sheet
+    // Try multiple approaches to access the Shareholders sheet (now with 5 columns)
     const shareholdersAttempts = [
-      'Shareholders!A2:D',
-      'Shareholders!A1:D', 
-      'Shareholders!A:D',
-      "'Shareholders'!A2:D",  // With quotes
-      'Sheet3!A2:D',          // Try by position
-      'Sheet3!A1:D',          // Try by position with header
+      'Shareholders!A2:E',    // Skip header, 5 columns
+      'Shareholders!A1:E',    // Include header, 5 columns
+      'Shareholders!A:E',     // All rows, 5 columns
+      "'Shareholders'!A2:E",  // With quotes
+      'Sheet3!A2:E',          // Try by position
+      'Sheet3!A1:E',          // Try by position with header
       'Shareholders!A2:Z',    // Wider range in case more columns
       'Sheet3!A2:Z'           // Wider range by position
     ];
@@ -716,25 +716,27 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
   const shareholdersByCompany = {};
   shareholderRows.forEach((row, index) => {
     try {
-      const companyName = row[0]?.trim(); // Company
+      const ticker = row[0]?.trim(); // Ticker (e.g., ACS.MC)
+      const companyName = row[1]?.trim(); // Company name
       const shareholder = {
-        name: row[1] || '', // Significant Shareholder  
-        percentage: parseFloat(row[2]) || 0, // Ownership_percentage
-        date: row[3] || '' // Date
+        name: row[2] || '', // Significant Shareholder  
+        percentage: parseFloat(row[3]) || 0, // Ownership_percentage
+        date: row[4] || '' // Date
       };
       
       console.log(`📊 Processing shareholder row ${index + 1}:`, {
+        ticker,
         companyName,
         shareholderName: shareholder.name,
         percentage: shareholder.percentage,
         date: shareholder.date
       });
       
-      if (companyName && shareholder.name) {
-        if (!shareholdersByCompany[companyName]) {
-          shareholdersByCompany[companyName] = [];
+      if (ticker && shareholder.name) {
+        if (!shareholdersByCompany[ticker]) {
+          shareholdersByCompany[ticker] = [];
         }
-        shareholdersByCompany[companyName].push(shareholder);
+        shareholdersByCompany[ticker].push(shareholder);
       }
     } catch (error) {
       console.warn(`⚠️ Error parsing shareholder row ${index + 2}:`, row, error.message);
@@ -742,7 +744,7 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
   });
   
   console.log(`📊 Processed shareholders for ${Object.keys(shareholdersByCompany).length} companies`);
-  console.log(`📋 Shareholder company names found:`, Object.keys(shareholdersByCompany));
+  console.log(`📋 Shareholder tickers found:`, Object.keys(shareholdersByCompany));
   
   // Debug: Log first few shareholder entries
   if (Object.keys(shareholdersByCompany).length > 0) {
@@ -826,36 +828,14 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
           company.directors = matchedDirectors;
         }
         
-        // Try to match shareholders using the same company name variations
-        let matchedShareholders = null;
-        
-        // First try exact matches
-        for (const variation of companyNameVariations) {
-          if (shareholdersByCompany[variation]) {
-            matchedShareholders = shareholdersByCompany[variation];
-            console.log(`📊 Exact match: ${matchedShareholders.length} shareholders for ${company.company} (via "${variation}")`);
-            break;
-          }
-        }
-        
-        // If no exact match, try partial matching
-        if (!matchedShareholders) {
-          for (const shareholderCompanyName of Object.keys(shareholdersByCompany)) {
-            for (const variation of companyNameVariations) {
-              // Check if company name appears in shareholder company name (case insensitive)
-              if (shareholderCompanyName.toLowerCase().includes(variation.toLowerCase()) ||
-                  variation.toLowerCase().includes(shareholderCompanyName.toLowerCase())) {
-                matchedShareholders = shareholdersByCompany[shareholderCompanyName];
-                console.log(`📊 Partial match: ${matchedShareholders.length} shareholders for ${company.company} (${variation} ↔ ${shareholderCompanyName})`);
-                break;
-              }
-            }
-            if (matchedShareholders) break;
-          }
-        }
+        // Match shareholders by ticker (exact match)
+        const matchedShareholders = shareholdersByCompany[company.ticker];
         
         if (matchedShareholders) {
           company.shareholders = matchedShareholders;
+          console.log(`📊 Ticker match: ${matchedShareholders.length} shareholders for ${company.company} (${company.ticker})`);
+        } else {
+          console.log(`📊 No shareholders found for ${company.company} (${company.ticker})`);
         }
         
         return company;

@@ -42,6 +42,7 @@ CREATE TABLE company_prices (
 CREATE TABLE company_shareholders (
     id VARCHAR(36) PRIMARY KEY,
     company_id VARCHAR(36) NOT NULL,
+    ticker VARCHAR(20),
     name VARCHAR(255) NOT NULL,
     type ENUM('individual', 'institutional', 'government', 'insider', 'other') NOT NULL,
     percentage DECIMAL(5,2) NOT NULL,
