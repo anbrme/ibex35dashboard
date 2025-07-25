@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import styled from 'styled-components';
-import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus } from 'lucide-react';
+import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Settings } from 'lucide-react';
 import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 import { NodeDetailModal } from './NodeDetailModal';
 import { networkAnalyticsService } from '../../services/networkAnalytics';
@@ -174,10 +174,80 @@ const FilterNotice = styled.div`
   text-align: center;
 `;
 
+const LayoutPanel = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isVisible'
+})<{ isVisible: boolean }>`
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  z-index: 15;
+  transform: ${props => props.isVisible ? 'translateX(0)' : 'translateX(-100%)'};  
+  opacity: ${props => props.isVisible ? 1 : 0};
+  transition: all 0.3s ease;
+  min-width: 180px;
+`;
+
+const LayoutToggle = styled.button`
+  position: absolute;
+  top: 80px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 16;
+  
+  &:hover {
+    background: white;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
+`;
+
+const LayoutTitle = styled.h4`
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const LayoutSelector = styled.select`
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+  
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+`;
+
 export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [layoutPanelVisible, setLayoutPanelVisible] = useState(false);
+  const [currentLayout, setCurrentLayout] = useState('cose');
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; visible: boolean }>({
     x: 0, y: 0, text: '', visible: false
   });
@@ -659,24 +729,30 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       layout: {
         name: 'cose',
         animate: true,
-        animationDuration: 2000,
-        animationEasing: 'ease-out',
+        animationDuration: 3000,
+        animationEasing: 'ease-in-out',
         fit: true,
         padding: padding,
-        componentSpacing: Math.max(60, idealEdgeLength * 1.5),
-        nodeOverlap: 8,
-        idealEdgeLength: idealEdgeLength,
-        edgeElasticity: 32,
-        nestingFactor: 1.2,
-        gravity: Math.max(0.25, Math.min(0.8, 1.5 / Math.sqrt(totalNodes))),
-        numIter: Math.min(1500, Math.max(800, totalNodes * 3)),
-        initialTemp: 2000,
-        coolingFactor: 0.95,
-        minTemp: 1.0,
-        nodeRepulsion: nodeRepulsion,
-        randomize: false,
+        componentSpacing: Math.max(120, idealEdgeLength * 2.5),
+        nodeOverlap: 20,
+        idealEdgeLength: Math.max(80, idealEdgeLength * 1.5),
+        edgeElasticity: 16,
+        nestingFactor: 1.8,
+        gravity: Math.max(0.1, Math.min(0.5, 0.8 / Math.sqrt(totalNodes))),
+        numIter: Math.min(2000, Math.max(1200, totalNodes * 4)),
+        initialTemp: 3000,
+        coolingFactor: 0.92,
+        minTemp: 0.5,
+        nodeRepulsion: nodeRepulsion * 2,
+        randomize: true,
         avoidOverlap: true,
-        refresh: 20,
+        refresh: 10,
+        ready: function() {
+          console.log('Layout ready - applying final positioning...');
+        },
+        stop: function() {
+          console.log('Layout stopped - nodes positioned');
+        }
       },
       zoom: 1,
       pan: { x: 0, y: 0 },
@@ -956,6 +1032,37 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
           💡 Network simplified: {shouldFilterDirectors ? 'showing cross-board directors only' : ''}{shouldFilterDirectors && shouldFilterShareholders ? ' • ' : ''}{shouldFilterShareholders ? 'showing major shareholders (>3%) only' : ''}
         </FilterNotice>
       )}
+      
+      <LayoutToggle 
+        onClick={() => setLayoutPanelVisible(!layoutPanelVisible)}
+        title="Layout Settings"
+      >
+        <Settings size={16} />
+      </LayoutToggle>
+      
+      <LayoutPanel isVisible={layoutPanelVisible}>
+        <LayoutTitle>
+          <Settings size={14} />
+          Layout
+        </LayoutTitle>
+        
+        <LayoutSelector 
+          value={currentLayout}
+          onChange={(e) => {
+            setCurrentLayout(e.target.value);
+            if (cyRef.current) {
+              const layout = cyRef.current.layout({ name: e.target.value as any, fit: true, padding: 40 });
+              layout.run();
+            }
+          }}
+        >
+          <option value="cose">Force-Directed</option>
+          <option value="grid">Grid Layout</option>
+          <option value="circle">Circular</option>
+          <option value="breadthfirst">Hierarchical</option>
+          <option value="concentric">Concentric</option>
+        </LayoutSelector>
+      </LayoutPanel>
       
       <Controls>
         <ControlButton onClick={handleZoomIn} title="Zoom In">

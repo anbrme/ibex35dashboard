@@ -3,6 +3,8 @@ import styled, { createGlobalStyle, keyframes } from 'styled-components';
 import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, DollarSign, ArrowUp, ArrowDown, Percent, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
 import { CytoscapeNetworkGraph } from './enhanced/CytoscapeNetworkGraph';
+import { NetworkAnalyticsDashboard } from './enhanced/NetworkAnalyticsDashboard';
+import { networkAnalyticsService } from '../services/networkAnalytics';
 import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
 import { ShareholdersAnalysisPanel } from './ShareholdersAnalysisPanel';
 import { ComprehensiveInsights } from './insights/ComprehensiveInsights';
@@ -35,10 +37,11 @@ const pulse = keyframes`
 `;
 
 // Styled components
-const Container = styled.div`
+const Container = styled.div<{ panelVisible: boolean }>`
   min-height: 100vh;
   display: flex;
   background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 50%, #581c87 100%);
+  transition: all 0.3s ease;
 `;
 
 const LeftPanel = styled.div.withConfig({
@@ -54,9 +57,7 @@ const LeftPanel = styled.div.withConfig({
   min-height: 100vh;
   overflow: hidden;
   transition: all 0.3s ease;
-  transform: ${props => props.isVisible ? 'translateX(0)' : 'translateX(-100%)'};
   opacity: ${props => props.isVisible ? 1 : 0};
-  visibility: ${props => props.isVisible ? 'visible' : 'hidden'};
 `;
 
 const Header = styled.div`
@@ -570,6 +571,32 @@ const VisualizationTitle = styled.h2`
   flex-shrink: 0;
 `;
 
+const TitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+`;
+
+const AnalyticsToggle = styled.button<{ isActive: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: ${props => props.isActive ? '#3b82f6' : '#f3f4f6'};
+  color: ${props => props.isActive ? 'white' : '#374151'};
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: ${props => props.isActive ? '#2563eb' : '#e5e7eb'};
+  }
+`;
+
 const VisualizationContent = styled.div`
   flex: 1;
   display: flex;
@@ -725,6 +752,14 @@ export function StyledDashboard() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string>('');
   const [isPanelVisible, setIsPanelVisible] = useState(true);
+  const [analyticsVisible, setAnalyticsVisible] = useState(true);
+
+  // Calculate network analytics
+  const networkAnalysis = useMemo(() => {
+    const selectedCompanies = companies.filter(company => selectedCompanyIds.has(company.ticker));
+    if (!selectedCompanies || selectedCompanies.length === 0) return null;
+    return networkAnalyticsService.calculateNetworkMetrics(selectedCompanies);
+  }, [companies, selectedCompanyIds]);
 
   useEffect(() => {
     fetchData();
@@ -863,7 +898,7 @@ export function StyledDashboard() {
   return (
     <>
       <GlobalStyle />
-      <Container>
+      <Container panelVisible={isPanelVisible}>
         {/* Panel Toggle Button */}
         <PanelToggle 
           isVisible={isPanelVisible}
@@ -1152,22 +1187,37 @@ export function StyledDashboard() {
           {/* Visualization Area */}
           <VisualizationArea>
             <VisualizationCard>
-              <VisualizationTitle>
-                {activeView === 'network' && 'Company & Director Network'}
-                {activeView === 'sectors' && 'Sector Distribution'}
-                {activeView === 'performance' && 'Performance Overview'}
-                {activeView === 'directors' && 'Director Analysis'}
-                {activeView === 'insights' && 'Financial Intelligence Dashboard'}
-              </VisualizationTitle>
+              <TitleRow>
+                <VisualizationTitle style={{ margin: 0 }}>
+                  {activeView === 'network' && 'Company & Director Network'}
+                  {activeView === 'sectors' && 'Sector Distribution'}
+                  {activeView === 'performance' && 'Performance Overview'}
+                  {activeView === 'directors' && 'Director Analysis'}
+                  {activeView === 'insights' && 'Financial Intelligence Dashboard'}
+                </VisualizationTitle>
+                {activeView === 'network' && selectedCompanyIds.size > 0 && (
+                  <AnalyticsToggle 
+                    isActive={analyticsVisible}
+                    onClick={() => setAnalyticsVisible(!analyticsVisible)}
+                  >
+                    <BarChart3 size={16} />
+                    Analytics
+                  </AnalyticsToggle>
+                )}
+              </TitleRow>
               
               <VisualizationContent>
                 {activeView === 'network' && (
-                  <CytoscapeNetworkGraph
-                    companies={companies}
-                    selectedCompanyIds={selectedCompanyIds}
-                    width={800}
-                    height={500}
-                  />
+                  <>
+                    <CytoscapeNetworkGraph
+                      companies={companies}
+                      selectedCompanyIds={selectedCompanyIds}
+                    />
+                    <NetworkAnalyticsDashboard 
+                      analysis={networkAnalysis}
+                      isVisible={analyticsVisible && selectedCompanyIds.size > 0}
+                    />
+                  </>
                 )}
                 
                 {activeView === 'sectors' && (

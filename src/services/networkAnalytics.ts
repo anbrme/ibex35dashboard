@@ -17,6 +17,25 @@ export interface NetworkNode {
   connections: string[];
 }
 
+export interface BoardInterlockMetrics {
+  interlockIndex: number;
+  crossBoardConnections: number;
+  structuralPower: number;
+}
+
+export interface OwnershipMetrics {
+  concentrationScore: number;
+  mutualOwnershipIntensity: number;
+  votingPower: number;
+}
+
+export interface MarketMetrics {
+  marketCapWeight: number;
+  liquidityScore: number;
+  earningsPower: number;
+  volatilityFootprint: number;
+}
+
 export interface NetworkAnalysis {
   nodes: NetworkNode[];
   totalNodes: number;
@@ -26,6 +45,18 @@ export interface NetworkAnalysis {
   keyInfluencers: NetworkNode[];
   crossBoardDirectors: NetworkNode[];
   majorShareholders: NetworkNode[];
+  boardInterlocks: BoardInterlockMetrics;
+  ownershipAnalysis: OwnershipMetrics;
+  marketAnalysis: MarketMetrics;
+  powerInfluenceMatrix: Array<{
+    id: string;
+    name: string;
+    type: string;
+    marketCap: number;
+    influence: number;
+    centrality: number;
+    structuralPower: number;
+  }>;
 }
 
 class NetworkAnalyticsService {
@@ -39,7 +70,11 @@ class NetworkAnalyticsService {
         averageDegree: 0,
         keyInfluencers: [],
         crossBoardDirectors: [],
-        majorShareholders: []
+        majorShareholders: [],
+        boardInterlocks: { interlockIndex: 0, crossBoardConnections: 0, structuralPower: 0 },
+        ownershipAnalysis: { concentrationScore: 0, mutualOwnershipIntensity: 0, votingPower: 0 },
+        marketAnalysis: { marketCapWeight: 0, liquidityScore: 0, earningsPower: 0, volatilityFootprint: 0 },
+        powerInfluenceMatrix: []
       };
     }
 
@@ -258,6 +293,12 @@ class NetworkAnalyticsService {
       .filter(n => n.type === 'shareholder' && n.metrics.influence > 0.1)
       .sort((a, b) => b.metrics.influence - a.metrics.influence);
 
+    // Calculate advanced metrics
+    const boardInterlocks = this.calculateBoardInterlockMetrics(companies, crossBoardDirectors);
+    const ownershipAnalysis = this.calculateOwnershipMetrics(companies);
+    const marketAnalysis = this.calculateMarketMetrics(companies);
+    const powerInfluenceMatrix = this.createPowerInfluenceMatrix(companies, nodes);
+
     return {
       nodes,
       totalNodes,
@@ -266,7 +307,11 @@ class NetworkAnalyticsService {
       averageDegree,
       keyInfluencers,
       crossBoardDirectors,
-      majorShareholders
+      majorShareholders,
+      boardInterlocks,
+      ownershipAnalysis,
+      marketAnalysis,
+      powerInfluenceMatrix
     };
   }
 
@@ -330,6 +375,184 @@ class NetworkAnalyticsService {
   getCentralityRanking(analysis: NetworkAnalysis): NetworkNode[] {
     return [...analysis.nodes]
       .sort((a, b) => b.metrics.centrality - a.metrics.centrality);
+  }
+
+  private calculateBoardInterlockMetrics(companies: SecureIBEXCompanyData[], crossBoardDirectors: NetworkNode[]): BoardInterlockMetrics {
+    const interlockIndex = crossBoardDirectors.length;
+    const crossBoardConnections = crossBoardDirectors.reduce((sum, director) => sum + director.metrics.connections, 0);
+    
+    // Calculate structural power based on cross-board positions and company market caps
+    let structuralPower = 0;
+    crossBoardDirectors.forEach(director => {
+      director.connections.forEach(companyTicker => {
+        const company = companies.find(c => c.ticker === companyTicker);
+        if (company) {
+          structuralPower += Math.log10(company.marketCapEur + 1) * director.metrics.connections;
+        }
+      });
+    });
+
+    return {
+      interlockIndex,
+      crossBoardConnections,
+      structuralPower
+    };
+  }
+
+  private calculateOwnershipMetrics(companies: SecureIBEXCompanyData[]): OwnershipMetrics {
+    let totalConcentration = 0;
+    let mutualOwnership = 0;
+    let totalVotingPower = 0;
+
+    companies.forEach(company => {
+      if (!company.shareholders) return;
+
+      // Calculate ownership concentration (top 5 shareholders)
+      const sortedShareholders = company.shareholders
+        .filter(s => s.percentage)
+        .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
+        .slice(0, 5);
+      
+      const top5Concentration = sortedShareholders.reduce((sum, s) => sum + (s.percentage || 0), 0);
+      totalConcentration += top5Concentration;
+
+      // Calculate voting power (simplified Banzhaf index)
+      const majorityThreshold = 50;
+      
+      let votingPower = 0;
+      sortedShareholders.forEach(shareholder => {
+        const shareholding = shareholder.percentage || 0;
+        if (shareholding >= majorityThreshold) {
+          votingPower += 1; // Full control
+        } else {
+          // Partial voting power based on coalition potential
+          votingPower += shareholding / majorityThreshold;
+        }
+      });
+      
+      totalVotingPower += votingPower;
+
+      // Check for mutual ownership (simplified)
+      company.shareholders.forEach(shareholder => {
+        if (shareholder.name) {
+          const isCompany = companies.some(c => 
+            c.company && shareholder.name && 
+            c.company.toLowerCase().includes(shareholder.name.toLowerCase().split(' ')[0])
+          );
+          if (isCompany) {
+            mutualOwnership += shareholder.percentage || 0;
+          }
+        }
+      });
+    });
+
+    return {
+      concentrationScore: totalConcentration / companies.length,
+      mutualOwnershipIntensity: mutualOwnership,
+      votingPower: totalVotingPower / companies.length
+    };
+  }
+
+  private calculateMarketMetrics(companies: SecureIBEXCompanyData[]): MarketMetrics {
+    const totalMarketCap = companies.reduce((sum, c) => sum + c.marketCapEur, 0);
+    
+    let totalLiquidity = 0;
+    let totalEarningsPower = 0;
+    let totalVolatility = 0;
+    let validCompanies = 0;
+
+    companies.forEach(company => {
+      // Market cap weight
+      const marketCapWeight = company.marketCapEur / totalMarketCap;
+      
+      // Liquidity score (based on price change as proxy for trading activity)
+      const priceChange = Math.abs(company.changePercent || 0);
+      totalLiquidity += priceChange * marketCapWeight;
+      
+      // Earnings power (P/E ratio analysis)
+      if (company.peRatio && company.peRatio > 0) {
+        totalEarningsPower += (1 / company.peRatio) * marketCapWeight;
+      }
+      
+      // Volatility footprint (using available data)
+      // Note: Using price change as volatility proxy since 52-week data not available
+      totalVolatility += priceChange * marketCapWeight;
+      
+      validCompanies++;
+    });
+
+    return {
+      marketCapWeight: 1, // Normalized to 1
+      liquidityScore: totalLiquidity,
+      earningsPower: totalEarningsPower,
+      volatilityFootprint: totalVolatility
+    };
+  }
+
+  private createPowerInfluenceMatrix(companies: SecureIBEXCompanyData[], nodes: NetworkNode[]): Array<{
+    id: string;
+    name: string;
+    type: string;
+    marketCap: number;
+    influence: number;
+    centrality: number;
+    structuralPower: number;
+  }> {
+    const matrix: Array<{
+      id: string;
+      name: string;
+      type: string;
+      marketCap: number;
+      influence: number;
+      centrality: number;
+      structuralPower: number;
+    }> = [];
+
+    nodes.forEach(node => {
+      let marketCap = 0;
+      let structuralPower = 0;
+      
+      if (node.type === 'company') {
+        const company = companies.find(c => c.ticker === node.id);
+        if (company) {
+          marketCap = company.marketCapEur;
+          structuralPower = Math.log10(marketCap + 1) * node.metrics.centrality;
+        }
+      } else if (node.type === 'director') {
+        // Structural power based on companies' market caps
+        node.connections.forEach(companyTicker => {
+          const company = companies.find(c => c.ticker === companyTicker);
+          if (company) {
+            structuralPower += Math.log10(company.marketCapEur + 1) * 0.1;
+          }
+        });
+      } else if (node.type === 'shareholder') {
+        // Structural power based on ownership stakes
+        node.connections.forEach(companyTicker => {
+          const company = companies.find(c => c.ticker === companyTicker);
+          if (company && company.shareholders) {
+            const shareholding = company.shareholders.find(s => 
+              s.name && s.name.toLowerCase().includes(node.name.toLowerCase())
+            );
+            if (shareholding) {
+              structuralPower += (shareholding.percentage || 0) * Math.log10(company.marketCapEur + 1) * 0.01;
+            }
+          }
+        });
+      }
+
+      matrix.push({
+        id: node.id,
+        name: node.name,
+        type: node.type,
+        marketCap,
+        influence: node.metrics.influence,
+        centrality: node.metrics.centrality,
+        structuralPower
+      });
+    });
+
+    return matrix.sort((a, b) => b.structuralPower - a.structuralPower);
   }
 }
 
