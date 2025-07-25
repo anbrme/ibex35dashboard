@@ -97,6 +97,13 @@ export class SecureGoogleSheetsService {
           position: director.position,
           appointmentDate: director.appointedDate || director.appointmentDate || '',
           bioUrl: director.bio || director.bioUrl || ''
+        })),
+        shareholders: (rawCompany.shareholders || []).map((shareholder: any) => ({
+          name: shareholder.name,
+          type: shareholder.type as 'individual' | 'institutional' | 'government' | 'insider' | 'other',
+          percentage: shareholder.percentage,
+          shares: shareholder.shares,
+          reportDate: shareholder.reportDate
         }))
       }));
       
