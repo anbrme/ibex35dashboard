@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import styled from 'styled-components';
-import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus } from 'lucide-react';
+import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Settings, Filter } from 'lucide-react';
 import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
+import { NodeDetailModal } from './NodeDetailModal';
+import { networkAnalyticsService } from '../../services/networkAnalytics';
 
 interface Props {
   companies: SecureIBEXCompanyData[];
@@ -27,12 +29,14 @@ const Container = styled.div.withConfig({
     ? '0 0 50px rgba(0, 0, 0, 0.3)' 
     : 'inset 0 2px 8px rgba(0, 0, 0, 0.1)'};
   transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
 `;
 
 const GraphContainer = styled.div`
   width: 100%;
-  height: 100%;
-  min-height: 400px;
+  flex: 1;
+  min-height: 0;
   position: relative;
 `;
 
@@ -103,31 +107,43 @@ const Tooltip = styled.div.withConfig({
   }
 `;
 
-const Legend = styled.div`
+const Legend = styled.div.withConfig({
+  shouldForwardProp: (prop) => !['isFullscreen', 'isVisible'].includes(prop as string)
+})<{ isFullscreen: boolean; isVisible: boolean }>`
   position: absolute;
   bottom: 16px;
   left: 16px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  padding: ${props => props.isVisible ? '16px' : '12px'};
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   z-index: 10;
+  transition: all 0.3s ease;
+  max-height: ${props => props.isVisible ? '400px' : '50px'};
+  overflow: hidden;
+  cursor: pointer;
 `;
 
-const LegendTitle = styled.h4`
+
+const LegendTitle = styled.h4.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isFullscreen'
+})<{ isFullscreen: boolean }>`
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
   color: #1f2937;
 `;
 
-const LegendItem = styled.div`
+const LegendItem = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isFullscreen'
+})<{ isFullscreen: boolean }>`
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
   font-size: 12px;
+  color: #374151;
   
   &:last-child {
     margin-bottom: 0;
@@ -143,13 +159,309 @@ const LegendDot = styled.div<{ color: string; size?: number }>`
   flex-shrink: 0;
 `;
 
+
+const LayoutPanel = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isVisible'
+})<{ isVisible: boolean }>`
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  z-index: 15;
+  transform: ${props => props.isVisible ? 'translateX(0)' : 'translateX(-100%)'};  
+  opacity: ${props => props.isVisible ? 1 : 0};
+  transition: all 0.3s ease;
+  min-width: 180px;
+`;
+
+const LayoutToggle = styled.button`
+  position: absolute;
+  top: 80px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 16;
+  
+  &:hover {
+    background: white;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
+`;
+
+const LayoutTitle = styled.h4`
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const LayoutSelector = styled.select`
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+  
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+`;
+
+const FilterPanel = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isVisible'
+})<{ isVisible: boolean }>`
+  position: absolute;
+  top: 130px;
+  left: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  z-index: 15;
+  transform: ${props => props.isVisible ? 'translateX(0)' : 'translateX(-100%)'};  
+  opacity: ${props => props.isVisible ? 1 : 0};
+  transition: all 0.3s ease;
+  min-width: 200px;
+`;
+
+const FilterToggle = styled.button`
+  position: absolute;
+  top: 130px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 16;
+  
+  &:hover {
+    background: white;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
+`;
+
+const FilterTitle = styled.h4`
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const FilterGroup = styled.div`
+  margin-bottom: 16px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const FilterLabel = styled.label`
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+`;
+
+const FilterInput = styled.input`
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+`;
+
+const SearchContainer = styled.div`
+  position: relative;
+`;
+
+const SuggestionsList = styled.div<{ isVisible: boolean }>`
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: ${props => props.isVisible ? 'block' : 'none'};
+`;
+
+const SuggestionItem = styled.div`
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  border-bottom: 1px solid #f3f4f6;
+  
+  &:hover {
+    background: #f8fafc;
+  }
+  
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
 export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [layoutPanelVisible, setLayoutPanelVisible] = useState(false);
+  const [legendVisible, setLegendVisible] = useState(true);
+  const [filtersVisible, setFiltersVisible] = useState(false);
+  const [currentLayout, setCurrentLayout] = useState('cose');
+  const [minDirectorCompanies, setMinDirectorCompanies] = useState(1);
+  const [minShareholderPercentage, setMinShareholderPercentage] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; visible: boolean }>({
     x: 0, y: 0, text: '', visible: false
   });
+  const [modalData, setModalData] = useState<{
+    isOpen: boolean;
+    nodeData: {
+      id: string;
+      type: 'company' | 'director' | 'shareholder';
+      label: string;
+      company?: SecureIBEXCompanyData;
+      director?: {
+        name: string;
+        position?: string;
+        allPositions?: string[];
+        companyCount?: number;
+        appointmentDate?: string;
+      };
+      shareholder?: {
+        name: string;
+        type?: string;
+        percentage?: number;
+        totalPercentage?: number;
+        companyCount?: number;
+        reportDate?: string;
+      };
+      companies?: string[];
+      networkMetrics?: {
+        centrality: number;
+        betweennessCentrality: number;
+        closeness: number;
+        degree: number;
+        influence: number;
+        connections: number;
+      };
+    } | null;
+  }>({
+    isOpen: false,
+    nodeData: null
+  });
+
+  // Calculate network analytics only when companies change
+  const networkAnalysis = useMemo(() => {
+    if (!companies || companies.length === 0) return null;
+    console.log('🔄 Recalculating network analytics for', companies.length, 'companies');
+    return networkAnalyticsService.calculateNetworkMetrics(companies);
+  }, [companies]);
+
+  // Create autocomplete suggestions from selected companies only for better performance
+  const allNames = useMemo(() => {
+    if (selectedCompanyIds.size === 0) return [];
+    
+    const names = new Set<string>();
+    const relevantCompanies = companies.filter(c => c && c.ticker && selectedCompanyIds.has(c.ticker));
+    
+    // Add company names
+    relevantCompanies.forEach(company => {
+      if (company.company) names.add(company.company);
+      if (company.ticker) names.add(company.ticker);
+    });
+    
+    // Add director names
+    relevantCompanies.forEach(company => {
+      if (company.directors) {
+        company.directors.forEach(director => {
+          if (director.name) names.add(director.name);
+        });
+      }
+    });
+    
+    // Add shareholder names
+    relevantCompanies.forEach(company => {
+      if (company.shareholders) {
+        company.shareholders.forEach(shareholder => {
+          if (shareholder.name) names.add(shareholder.name);
+        });
+      }
+    });
+    
+    console.log('🔍 Generated', names.size, 'autocomplete names from', relevantCompanies.length, 'companies');
+    return Array.from(names).sort();
+  }, [companies, selectedCompanyIds]);
+
+  // Handle search input and suggestions
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    
+    if (value.length > 1) {
+      const filtered = allNames.filter(name => 
+        name.toLowerCase().includes(value.toLowerCase())
+      ).slice(0, 8); // Limit to 8 suggestions
+      
+      setSearchSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectSuggestion = (suggestion: string) => {
+    setSearchTerm(suggestion);
+    setShowSuggestions(false);
+  };
+
 
   useEffect(() => {
     if (!containerRef.current || !companies || companies.length === 0) return;
@@ -158,6 +470,14 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     const relevantCompanies = selectedCompanyIds.size > 0 
       ? companies.filter(c => c && c.ticker && selectedCompanyIds.has(c.ticker))
       : []; // Show nothing if no companies are selected
+
+    console.log('🎯 Graph update triggered:', {
+      selectedCompanies: selectedCompanyIds.size,
+      relevantCompanies: relevantCompanies.length,
+      searchTerm,
+      minDirectorCompanies,
+      minShareholderPercentage
+    });
 
     if (relevantCompanies.length === 0) {
       // Clear the graph if no companies selected
@@ -172,21 +492,66 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     const elements: ElementDefinition[] = [];
     let hasValidElements = false;
 
-    // Calculate node sizes based on number of companies
-    const numCompanies = relevantCompanies.length;
-    const companySize = Math.max(30, Math.min(60, 200 / Math.sqrt(numCompanies)));
-    const directorSize = Math.max(20, Math.min(40, 150 / Math.sqrt(numCompanies)));
-    const shareholderSize = Math.max(15, Math.min(35, 120 / Math.sqrt(numCompanies)));
+    // Calculate node sizes based on number of companies and network metrics
+    const relevantCompaniesCount = relevantCompanies.length;
+    const baseCompanySize = Math.max(30, Math.min(60, 200 / Math.sqrt(relevantCompaniesCount)));
+    const baseDirectorSize = Math.max(20, Math.min(40, 150 / Math.sqrt(relevantCompaniesCount)));
+    const baseShareholderSize = Math.max(15, Math.min(35, 120 / Math.sqrt(relevantCompaniesCount)));
+
+    // Helper function to get enhanced node size based on metrics
+    const getEnhancedNodeSize = (baseSize: number, nodeId: string): number => {
+      if (!networkAnalysis) return baseSize;
+      
+      const metrics = networkAnalyticsService.getNodeMetrics(nodeId, networkAnalysis);
+      if (!metrics) return baseSize;
+      
+      // Scale based on influence and centrality
+      const influenceMultiplier = Math.max(1, Math.min(2, 1 + metrics.influence));
+      const centralityMultiplier = Math.max(1, Math.min(1.5, 1 + metrics.centrality));
+      
+      return Math.round(baseSize * influenceMultiplier * centralityMultiplier);
+    };
+
+    // Helper function to get enhanced node color based on metrics
+    const getEnhancedNodeColor = (baseColor: string, nodeId: string, type: string): string => {
+      if (!networkAnalysis) return baseColor;
+      
+      const metrics = networkAnalyticsService.getNodeMetrics(nodeId, networkAnalysis);
+      if (!metrics) return baseColor;
+      
+      // Enhanced colors for high-influence nodes
+      if (type === 'company') {
+        if (metrics.influence > 2) return '#1e40af'; // Darker blue for high influence companies
+        if (metrics.centrality > 0.5) return '#2563eb'; // Medium blue for central companies
+        return baseColor;
+      } else if (type === 'director') {
+        if (metrics.connections > 2) return '#581c87'; // Darker purple for cross-board directors
+        if (metrics.influence > 3) return '#6b21a8'; // Enhanced purple for influential directors
+        return baseColor;
+      } else if (type === 'shareholder') {
+        if (metrics.influence > 1) return '#047857'; // Darker green for major shareholders
+        if (metrics.connections > 1) return '#059669'; // Enhanced green for cross-company shareholders
+        return baseColor;
+      }
+      
+      return baseColor;
+    };
 
     // Collect and consolidate directors and shareholders
     const directorsMap = new Map<string, {
-      director: any;
+      director: {
+        name: string;
+        position?: string;
+      };
       companies: Set<string>;
       allPositions: string[];
     }>();
     
     const shareholdersMap = new Map<string, {
-      shareholder: any;
+      shareholder: {
+        name: string;
+        percentage?: number;
+      };
       companies: Set<string>;
       totalPercentage: number;
     }>();
@@ -238,33 +603,60 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       }
     });
 
-    // Add company nodes
+    // Add company nodes (with search filtering)
     relevantCompanies.forEach(company => {
       if (company && company.ticker) {
+        // Filter by search term
+        const companyName = company.company || '';
+        const ticker = company.ticker || '';
+        if (searchTerm && !companyName.toLowerCase().includes(searchTerm.toLowerCase()) && !ticker.toLowerCase().includes(searchTerm.toLowerCase())) {
+          return; // Skip companies that don't match search
+        }
+        
+        const baseColor = selectedCompanyIds.has(company.ticker) ? '#3b82f6' : '#6366f1';
+        const enhancedSize = getEnhancedNodeSize(baseCompanySize, company.ticker);
+        const enhancedColor = getEnhancedNodeColor(baseColor, company.ticker, 'company');
+        
         elements.push({
           data: {
             id: company.ticker,
             label: company.formattedTicker || company.ticker,
             type: 'company',
             company: company,
-            size: companySize,
-            color: selectedCompanyIds.has(company.ticker) ? '#3b82f6' : '#6366f1'
+            size: enhancedSize,
+            color: enhancedColor,
+            networkMetrics: networkAnalysis ? networkAnalyticsService.getNodeMetrics(company.ticker, networkAnalysis) : null
           }
         });
         hasValidElements = true;
       }
     });
 
-    // Add consolidated director nodes
+    // Add consolidated director nodes (with smart filtering for complex networks)
     directorsMap.forEach((directorData, directorKey) => {
       const directorId = `dir_${directorKey.replace(/[^a-z0-9]/g, '_')}`;
       const director = directorData.director;
       const companyCount = directorData.companies.size;
       
-      // Adjust size based on number of companies (bigger for cross-board directors)
-      const adjustedSize = companyCount > 1 
-        ? Math.min(directorSize * 1.5, directorSize + 10)
-        : directorSize;
+      // Filter directors based on user settings
+      if (companyCount < minDirectorCompanies) {
+        return; // Skip directors below threshold
+      }
+      
+      // Filter by search term
+      if (searchTerm && !director.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return; // Skip directors that don't match search
+      }
+      
+      // Base color and size
+      const baseColor = companyCount > 1 ? '#7c3aed' : '#8b5cf6';
+      const baseSize = companyCount > 1 
+        ? Math.min(baseDirectorSize * 1.5, baseDirectorSize + 10)
+        : baseDirectorSize;
+
+      // Apply network analytics enhancements
+      const enhancedSize = getEnhancedNodeSize(baseSize, directorId);
+      const enhancedColor = getEnhancedNodeColor(baseColor, directorId, 'director');
 
       elements.push({
         data: {
@@ -277,8 +669,9 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             companyCount: companyCount
           },
           companies: Array.from(directorData.companies),
-          size: adjustedSize,
-          color: companyCount > 1 ? '#7c3aed' : '#8b5cf6' // Darker purple for cross-board
+          size: enhancedSize,
+          color: enhancedColor,
+          networkMetrics: networkAnalysis ? networkAnalyticsService.getNodeMetrics(directorId, networkAnalysis) : null
         }
       });
 
@@ -295,16 +688,32 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       });
     });
 
-    // Add consolidated shareholder nodes
+    // Add consolidated shareholder nodes (with smart filtering for complex networks)
     shareholdersMap.forEach((shareholderData, shareholderKey) => {
       const shareholderId = `shr_${shareholderKey.replace(/[^a-z0-9]/g, '_')}`;
       const shareholder = shareholderData.shareholder;
       const companyCount = shareholderData.companies.size;
+      const totalPercentage = shareholderData.totalPercentage;
       
-      // Adjust size based on number of companies and total percentage
-      const adjustedSize = companyCount > 1 
-        ? Math.min(shareholderSize * 1.5, shareholderSize + 8)
-        : shareholderSize;
+      // Filter shareholders based on user settings
+      if (totalPercentage < minShareholderPercentage) {
+        return; // Skip shareholders below threshold
+      }
+      
+      // Filter by search term
+      if (searchTerm && !shareholder.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return; // Skip shareholders that don't match search
+      }
+      
+      // Base color and size
+      const baseColor = companyCount > 1 ? '#059669' : '#10b981';
+      const baseSize = companyCount > 1 
+        ? Math.min(baseShareholderSize * 1.5, baseShareholderSize + 8)
+        : baseShareholderSize;
+
+      // Apply network analytics enhancements
+      const enhancedSize = getEnhancedNodeSize(baseSize, shareholderId);
+      const enhancedColor = getEnhancedNodeColor(baseColor, shareholderId, 'shareholder');
 
       elements.push({
         data: {
@@ -317,8 +726,9 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             totalPercentage: shareholderData.totalPercentage
           },
           companies: Array.from(shareholderData.companies),
-          size: adjustedSize,
-          color: companyCount > 1 ? '#059669' : '#10b981' // Darker green for cross-company
+          size: enhancedSize,
+          color: enhancedColor,
+          networkMetrics: networkAnalysis ? networkAnalyticsService.getNodeMetrics(shareholderId, networkAnalysis) : null
         }
       });
 
@@ -343,13 +753,20 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
 
     console.log(`🔍 Cytoscape initializing with ${elements.length} elements:`, elements.map(e => ({ id: e.data.id, type: e.data.type })));
 
-    // Adjust layout parameters based on graph complexity
+    // Adjust layout parameters based on graph complexity and container size
     const totalNodes = elements.filter(e => !e.data.source).length;
-    const idealEdgeLength = Math.max(20, Math.min(50, 300 / Math.sqrt(totalNodes)));
-    const nodeRepulsion = Math.max(1000, Math.min(4000, 8000 / Math.sqrt(totalNodes)));
+    const containerArea = containerRef.current ? 
+      containerRef.current.offsetWidth * containerRef.current.offsetHeight : 
+      800 * 600;
+    
+    // Dynamic spacing based on available space and number of nodes
+    const optimalSpacing = Math.sqrt(containerArea / totalNodes);
+    const idealEdgeLength = Math.max(40, Math.min(120, optimalSpacing * 0.8));
+    const nodeRepulsion = Math.max(2000, Math.min(8000, optimalSpacing * 30));
+    const padding = isFullscreen ? 30 : 40;
 
     // Initialize Cytoscape with error handling
-    let cy;
+    let cy: Core;
     try {
       cy = cytoscape({
       container: containerRef.current,
@@ -361,21 +778,24 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             'width': 'data(size)',
             'height': 'data(size)',
             'background-color': 'data(color)',
-            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTMgN1YxN0EyIDIgMCAwIDAgNSAxOUgxOUEyIDIgMCAwIDAgMjEgMTdWN00zIDdMMTIgMTNMMjEgN00zIDdMNSA1SDE5TDIxIDdaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K',
+            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTMgMjFoMThWOUgzdjEyem0yLTE4aDJWMWgydjJoOFYxaDJ2Mkg3djJ6IiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMC41Ii8+CjxwYXRoIGQ9Ik01IDExaDJ2Mkg1di0yem0wIDRoMnYySDV2LTJ6bTQtNGgydjJIOXYtMnptMCA0aDJ2Mkg5di0yem00LTRoMnYyaC0ydi0yem0wIDRoMnYyaC0ydi0yem00LTRoMnYyaC0ydi0yem0wIDRoMnYyaC0ydi0yeiIgZmlsbD0iIzMzMzMzMyIvPgo8L3N2Zz4K',
             'background-fit': 'contain',
             'background-position-x': '50%',
             'background-position-y': '50%',
-            'background-width': '60%',
-            'background-height': '60%',
+            'background-width': '70%',
+            'background-height': '70%',
             'label': 'data(label)',
             'text-valign': 'bottom',
             'text-halign': 'center',
-            'text-margin-y': 8,
+            'text-margin-y': 10,
             'color': '#1f2937',
-            'font-size': 12,
-            'font-weight': 600,
+            'font-size': 13,
+            'font-weight': 700,
             'font-family': 'Inter, sans-serif',
-            'border-width': 3,
+            'text-background-color': 'rgba(255, 255, 255, 0.9)',
+            'text-background-padding': '3px',
+            'text-background-shape': 'roundrectangle',
+            'border-width': 4,
             'border-color': '#ffffff',
             'border-opacity': 1,
             'z-index': 10
@@ -387,21 +807,24 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             'width': 'data(size)',
             'height': 'data(size)',
             'background-color': 'data(color)',
-            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIwIDIxVjE5QTQgNCAwIDAgMCAxNiAxNUg4QTQgNCAwIDAgMCA0IDE5VjIxTTEyIDExQTQgNCAwIDEgMCAxMiAzQTQgNCAwIDAgMCAxMiAxMVoiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=',
+            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSI4IiByPSI0IiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiMzMzMzMzMiIHN0cm9rZS13aWR0aD0iMC41Ii8+CjxwYXRoIGQ9Ik00IDIwYzAtNCAxLjc5LTcuNSA4LTcuNXM4IDMuNSA4IDcuNSIgZmlsbD0iIzMzMzMzMyIvPgo8cGF0aCBkPSJNNCAyMGMwLTQgMy41OC04IDgtOHM4IDQgOCA4IiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMC41IiBmaWxsPSJub25lIi8+Cjwvc3ZnPgo=',
             'background-fit': 'contain',
             'background-position-x': '50%',
             'background-position-y': '50%',
-            'background-width': '60%',
-            'background-height': '60%',
+            'background-width': '75%',
+            'background-height': '75%',
             'label': 'data(label)',
             'text-valign': 'bottom',
             'text-halign': 'center',
-            'text-margin-y': 6,
+            'text-margin-y': 8,
             'color': '#1f2937',
-            'font-size': 10,
-            'font-weight': 500,
+            'font-size': 11,
+            'font-weight': 600,
             'font-family': 'Inter, sans-serif',
-            'border-width': 2,
+            'text-background-color': 'rgba(255, 255, 255, 0.8)',
+            'text-background-padding': '2px',
+            'text-background-shape': 'roundrectangle',
+            'border-width': 3,
             'border-color': '#ffffff',
             'border-opacity': 1,
             'z-index': 5
@@ -413,21 +836,25 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             'width': 'data(size)',
             'height': 'data(size)',
             'background-color': 'data(color)',
-            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K',
+            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJsMS41IDYuNSA2LjUgMS01IDUgNSA1LTYuNSAxLjUtMS41IDYuNS0xLjUtNi41LTYuNS0xLjUgNS01LTUtNSA2LjUtMS41TDEyIDJ6IiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiMzMzMzMzMiIHN0cm9rZS13aWR0aD0iMSIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIzIiBmaWxsPSIjMzMzMzMzIi8+Cjwvc3ZnPg==',
             'background-fit': 'contain',
             'background-position-x': '50%',
             'background-position-y': '50%',
-            'background-width': '60%',
-            'background-height': '60%',
+            'background-width': '70%',
+            'background-height': '70%',
             'label': 'data(label)',
             'text-valign': 'bottom',
             'text-halign': 'center',
-            'text-margin-y': 5,
+            'text-margin-y': 7,
             'color': '#1f2937',
-            'font-size': 9,
-            'font-weight': 500,
+            'font-size': 10,
+            'font-weight': 600,
             'font-family': 'Inter, sans-serif',
-            'border-width': 2,
+            'text-background-color': 'rgba(255, 255, 255, 0.8)',
+            'text-background-padding': '2px',
+            'text-background-shape': 'roundrectangle',
+            'shape': 'diamond',
+            'border-width': 3,
             'border-color': '#ffffff',
             'border-opacity': 1,
             'z-index': 3
@@ -436,12 +863,29 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         {
           selector: 'edge',
           style: {
-            'width': 2,
-            'line-color': 'rgba(100, 116, 139, 0.4)',
-            'target-arrow-color': 'rgba(100, 116, 139, 0.6)',
+            'width': 3,
+            'line-color': 'rgba(59, 130, 246, 0.6)',
+            'target-arrow-color': 'rgba(59, 130, 246, 0.8)',
             'target-arrow-shape': 'triangle',
             'curve-style': 'straight',
-            'z-index': 1
+            'z-index': 1,
+            'opacity': 0.8
+          }
+        },
+        {
+          selector: 'edge[type="board_member"]',
+          style: {
+            'line-color': 'rgba(139, 92, 246, 0.7)',
+            'target-arrow-color': 'rgba(139, 92, 246, 0.9)',
+            'line-style': 'solid'
+          }
+        },
+        {
+          selector: 'edge[type="shareholder"]',
+          style: {
+            'line-color': 'rgba(16, 185, 129, 0.7)',
+            'target-arrow-color': 'rgba(16, 185, 129, 0.9)',
+            'line-style': 'dashed'
           }
         },
         {
@@ -474,21 +918,30 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       layout: {
         name: 'cose',
         animate: true,
-        animationDuration: 1500,
+        animationDuration: 3000,
+        animationEasing: 'ease-in-out',
         fit: true,
-        padding: 50,
-        componentSpacing: 40,
-        nodeOverlap: 4,
-        idealEdgeLength: idealEdgeLength,
+        padding: padding,
+        componentSpacing: Math.max(120, idealEdgeLength * 2.5),
+        nodeOverlap: 20,
+        idealEdgeLength: Math.max(80, idealEdgeLength * 1.5),
         edgeElasticity: 16,
-        nestingFactor: 1.2,
-        gravity: Math.min(1, 2 / Math.sqrt(totalNodes)),
-        numIter: Math.min(1000, Math.max(500, totalNodes * 2)),
-        initialTemp: 1000,
-        coolingFactor: 0.99,
-        minTemp: 1.0,
-        nodeRepulsion: nodeRepulsion,
-        randomize: false
+        nestingFactor: 1.8,
+        gravity: Math.max(0.1, Math.min(0.5, 0.8 / Math.sqrt(totalNodes))),
+        numIter: Math.min(2000, Math.max(1200, totalNodes * 4)),
+        initialTemp: 3000,
+        coolingFactor: 0.92,
+        minTemp: 0.5,
+        nodeRepulsion: nodeRepulsion * 2,
+        randomize: true,
+        avoidOverlap: true,
+        refresh: 10,
+        ready: function() {
+          console.log('Layout ready - applying final positioning...');
+        },
+        stop: function() {
+          console.log('Layout stopped - nodes positioned');
+        }
       },
       zoom: 1,
       pan: { x: 0, y: 0 },
@@ -526,7 +979,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     });
 
     // Event handlers
-    cy.on('mouseover', 'node', (event) => {
+    cy.on('mouseover', 'node', (event: any) => {
       const node = event.target;
       const data = node.data();
       const position = node.renderedPosition();
@@ -547,11 +1000,20 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         const marketCap = company?.marketCapEur || 0;
         const companyName = company?.company || company?.name || data.label || 'Unknown Company';
         const sector = company?.sector || 'Unknown Sector';
+        const metrics = data.networkMetrics;
+        
         tooltipText = `${companyName}\n${sector}\n${directorsCount} directors\nMarket Cap: €${(marketCap / 1e9).toFixed(1)}B`;
+        
+        if (metrics) {
+          tooltipText += `\nInfluence: ${metrics.influence.toFixed(2)}`;
+          tooltipText += `\nCentrality: ${metrics.centrality.toFixed(2)}`;
+          tooltipText += `\nConnections: ${metrics.connections}`;
+        }
       } else if (data.director) {
         const director = data.director;
         const companies = data.companies || [];
         const companyCount = director.companyCount || 1;
+        const metrics = data.networkMetrics;
         
         tooltipText = `${director.name || 'Unknown Director'}`;
         if (director.allPositions && director.allPositions.length > 0) {
@@ -568,10 +1030,16 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         if (director.appointmentDate) {
           tooltipText += `\nSince: ${director.appointmentDate}`;
         }
+        
+        if (metrics) {
+          tooltipText += `\nInfluence: ${metrics.influence.toFixed(2)}`;
+          tooltipText += `\nCentrality: ${metrics.centrality.toFixed(2)}`;
+        }
       } else if (data.shareholder) {
         const shareholder = data.shareholder;
         const companies = data.companies || [];
         const companyCount = shareholder.companyCount || 1;
+        const metrics = data.networkMetrics;
         
         tooltipText = `${shareholder.name || 'Unknown Shareholder'}`;
         tooltipText += `\nType: ${shareholder.type || 'Unknown'}`;
@@ -588,6 +1056,11 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         if (shareholder.reportDate) {
           tooltipText += `\nReport Date: ${shareholder.reportDate}`;
         }
+        
+        if (metrics) {
+          tooltipText += `\nInfluence: ${metrics.influence.toFixed(2)}`;
+          tooltipText += `\nCentrality: ${metrics.centrality.toFixed(2)}`;
+        }
       }
       
       setTooltip({
@@ -598,7 +1071,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       });
     });
 
-    cy.on('mouseout', 'node', (event) => {
+    cy.on('mouseout', 'node', (event: any) => {
       const node = event.target;
       
       // Remove hover effect unless highlighted
@@ -619,7 +1092,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       setTooltip(prev => ({ ...prev, visible: false }));
     });
 
-    cy.on('tap', 'node', (event) => {
+    cy.on('tap', 'node', (event: any) => {
       const node = event.target;
       cy.elements().removeClass('highlighted');
       
@@ -630,9 +1103,25 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       node.addClass('highlighted');
       connectedNodes.addClass('highlighted');
       connectedEdges.addClass('highlighted');
+
+      // Open modal with node details
+      const data = node.data();
+      setModalData({
+        isOpen: true,
+        nodeData: {
+          id: data.id,
+          type: data.type,
+          label: data.label,
+          company: data.company,
+          director: data.director,
+          shareholder: data.shareholder,
+          companies: data.companies,
+          networkMetrics: data.networkMetrics
+        }
+      });
     });
 
-    cy.on('tap', (event) => {
+    cy.on('tap', (event: any) => {
       if (event.target === cy) {
         cy.elements().removeClass('highlighted');
       }
@@ -648,7 +1137,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         console.error('Cytoscape cleanup error:', error);
       }
     };
-  }, [companies, selectedCompanyIds]);
+  }, [companies, selectedCompanyIds, networkAnalysis, minDirectorCompanies, minShareholderPercentage, searchTerm, isFullscreen, currentLayout]);
 
   const handleZoomIn = () => {
     if (cyRef.current) {
@@ -676,27 +1165,39 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
   };
 
   const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-    // Resize cytoscape after fullscreen toggle
+    const newFullscreenState = !isFullscreen;
+    setIsFullscreen(newFullscreenState);
+    
+    // Manage body scroll
+    if (newFullscreenState) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    
+    // Longer delay to ensure DOM changes are complete
     setTimeout(() => {
-      if (cyRef.current) {
+      if (cyRef.current && !cyRef.current.destroyed()) {
         cyRef.current.resize();
         cyRef.current.fit();
+        cyRef.current.center();
       }
-    }, 300);
+    }, 400);
   };
 
-  // Add keyboard support for fullscreen
+  // Add keyboard support for fullscreen and cleanup body styles
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isFullscreen) {
         setIsFullscreen(false);
+        document.body.style.overflow = 'auto';
         setTimeout(() => {
-          if (cyRef.current) {
+          if (cyRef.current && !cyRef.current.destroyed()) {
             cyRef.current.resize();
             cyRef.current.fit();
+            cyRef.current.center();
           }
-        }, 300);
+        }, 400);
       }
     };
 
@@ -704,11 +1205,128 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
+    
+    // Cleanup body styles on component unmount
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
   }, [isFullscreen]);
 
   return (
     <Container isFullscreen={isFullscreen}>
       <GraphContainer ref={containerRef} />
+      
+      
+      <LayoutToggle 
+        onClick={() => setLayoutPanelVisible(!layoutPanelVisible)}
+        title="Layout Settings"
+      >
+        <Settings size={16} />
+      </LayoutToggle>
+      
+      <LayoutPanel isVisible={layoutPanelVisible}>
+        <LayoutTitle>
+          <Settings size={14} />
+          Layout
+        </LayoutTitle>
+        
+        <LayoutSelector 
+          value={currentLayout}
+          onChange={(e) => {
+            setCurrentLayout(e.target.value);
+            if (cyRef.current) {
+              const layout = cyRef.current.layout({ name: e.target.value as any, fit: true, padding: 40 });
+              layout.run();
+            }
+          }}
+        >
+          <option value="cose">Force-Directed</option>
+          <option value="grid">Grid Layout</option>
+          <option value="circle">Circular</option>
+          <option value="breadthfirst">Hierarchical</option>
+          <option value="concentric">Concentric</option>
+        </LayoutSelector>
+      </LayoutPanel>
+      
+      {!filtersVisible && (
+        <FilterToggle 
+          onClick={() => setFiltersVisible(true)}
+          title="Network Filters"
+        >
+          <Filter size={16} />
+        </FilterToggle>
+      )}
+      
+      <FilterPanel isVisible={filtersVisible}>
+        <FilterTitle>
+          <Filter size={14} />
+          Network Filters
+        </FilterTitle>
+        
+        <FilterGroup>
+          <FilterLabel>Search Names</FilterLabel>
+          <SearchContainer>
+            <FilterInput
+              type="text"
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => setShowSuggestions(searchSuggestions.length > 0)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              placeholder="Company, director, or shareholder..."
+            />
+            <SuggestionsList isVisible={showSuggestions}>
+              {searchSuggestions.map((suggestion, index) => (
+                <SuggestionItem
+                  key={index}
+                  onMouseDown={() => selectSuggestion(suggestion)}
+                >
+                  {suggestion}
+                </SuggestionItem>
+              ))}
+            </SuggestionsList>
+          </SearchContainer>
+        </FilterGroup>
+        
+        <FilterGroup>
+          <FilterLabel>Min. Director Companies</FilterLabel>
+          <FilterInput
+            type="number"
+            min="1"
+            max="10"
+            value={minDirectorCompanies}
+            onChange={(e) => setMinDirectorCompanies(parseInt(e.target.value) || 1)}
+            placeholder="Min companies"
+          />
+        </FilterGroup>
+        
+        <FilterGroup>
+          <FilterLabel>Min. Shareholder % ({minShareholderPercentage}%)</FilterLabel>
+          <FilterInput
+            type="range"
+            min="0"
+            max="50"
+            step="1"
+            value={minShareholderPercentage}
+            onChange={(e) => setMinShareholderPercentage(parseInt(e.target.value))}
+          />
+        </FilterGroup>
+        
+        <button
+          onClick={() => setFiltersVisible(false)}
+          style={{
+            width: '100%',
+            padding: '8px',
+            background: '#f3f4f6',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            marginTop: '8px'
+          }}
+        >
+          Close Filters
+        </button>
+      </FilterPanel>
       
       <Controls>
         <ControlButton onClick={handleZoomIn} title="Zoom In">
@@ -728,48 +1346,94 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         </ControlButton>
       </Controls>
       
-      <Legend>
-        <LegendTitle>Network Legend</LegendTitle>
-        <LegendItem>
-          <LegendDot color="#3b82f6" size={16} />
-          <span>Companies</span>
-        </LegendItem>
-        <LegendItem>
-          <LegendDot color="#8b5cf6" size={12} />
-          <span>Directors</span>
-        </LegendItem>
-        <LegendItem>
-          <LegendDot color="#7c3aed" size={14} />
-          <span>Cross-board Directors</span>
-        </LegendItem>
-        <LegendItem>
-          <LegendDot color="#10b981" size={10} />
-          <span>Shareholders</span>
-        </LegendItem>
-        <LegendItem>
-          <LegendDot color="#059669" size={12} />
-          <span>Cross-company Shareholders</span>
-        </LegendItem>
-        <LegendItem>
-          <div style={{ 
-            width: 16, 
-            height: 2, 
-            background: 'rgba(100, 116, 139, 0.4)', 
-            position: 'relative' 
-          }}>
-            <div style={{
-              position: 'absolute',
-              right: -2,
-              top: -3,
-              width: 0,
-              height: 0,
-              borderLeft: '4px solid rgba(100, 116, 139, 0.6)',
-              borderTop: '4px solid transparent',
-              borderBottom: '4px solid transparent'
-            }} />
-          </div>
-          <span>Board Membership</span>
-        </LegendItem>
+      <Legend 
+        isFullscreen={isFullscreen} 
+        isVisible={legendVisible}
+        onClick={() => setLegendVisible(!legendVisible)}
+      >
+        <LegendTitle isFullscreen={isFullscreen}>
+          Network Legend {legendVisible ? '−' : '+'}
+        </LegendTitle>
+        {legendVisible && (
+          <>
+            <LegendItem isFullscreen={isFullscreen}>
+              <LegendDot color="#3b82f6" size={16} />
+              <span>Companies</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <LegendDot color="#8b5cf6" size={12} />
+              <span>Directors</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <LegendDot color="#7c3aed" size={14} />
+              <span>Cross-board Directors</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <div style={{ 
+                width: 10, 
+                height: 10, 
+                background: '#10b981', 
+                transform: 'rotate(45deg)',
+                borderRadius: '2px'
+              }} />
+              <span>Shareholders</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <div style={{ 
+                width: 12, 
+                height: 12, 
+                background: '#059669', 
+                transform: 'rotate(45deg)',
+                borderRadius: '2px'
+              }} />
+              <span>Major Shareholders</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <div style={{ 
+                width: 16, 
+                height: 3, 
+                background: 'rgba(139, 92, 246, 0.7)', 
+                position: 'relative',
+                borderRadius: '1px'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  right: -2,
+                  top: -2,
+                  width: 0,
+                  height: 0,
+                  borderLeft: '4px solid rgba(139, 92, 246, 0.9)',
+                  borderTop: '3px solid transparent',
+                  borderBottom: '3px solid transparent'
+                }} />
+              </div>
+              <span>Board Membership</span>
+            </LegendItem>
+            <LegendItem isFullscreen={isFullscreen}>
+              <div style={{ 
+                width: 16, 
+                height: 3, 
+                background: 'rgba(16, 185, 129, 0.7)', 
+                position: 'relative',
+                borderRadius: '1px',
+                borderTop: '1px dashed rgba(16, 185, 129, 0.9)',
+                borderBottom: '1px dashed rgba(16, 185, 129, 0.9)'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  right: -2,
+                  top: -2,
+                  width: 0,
+                  height: 0,
+                  borderLeft: '4px solid rgba(16, 185, 129, 0.9)',
+                  borderTop: '3px solid transparent',
+                  borderBottom: '3px solid transparent'
+                }} />
+              </div>
+              <span>Ownership</span>
+            </LegendItem>
+          </>
+        )}
       </Legend>
       
       <Tooltip
@@ -781,6 +1445,12 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
           <div key={i}>{line}</div>
         ))}
       </Tooltip>
+
+      <NodeDetailModal
+        isOpen={modalData.isOpen}
+        onClose={() => setModalData({ isOpen: false, nodeData: null })}
+        nodeData={modalData.nodeData}
+      />
     </Container>
   );
 }
