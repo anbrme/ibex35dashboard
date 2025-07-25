@@ -12,7 +12,7 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Cache-Control, Accept',
+          'Access-Control-Allow-Headers': 'Content-Type, Cache-Control, Accept, Pragma, Expires',
           'Access-Control-Max-Age': '86400',
         }
       });
@@ -434,19 +434,19 @@ async function fetchFromGoogleSheets(env) {
     // Fetch data from both sheets
     console.log('📋 Fetching companies from Sheet1...');
     // Fetch the full range with financial data
-    console.log('🔍 Fetching full range A2:L...');
-    const companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:L');
+    console.log('🔍 Fetching full range A2:N (including ISIN in column N)...');
+    const companiesData = await fetchGoogleSheetsData(SHEET_ID, accessToken, 'Sheet1!A2:N');
     
     console.log('👥 Fetching directors from Directors sheet...');
     let directorsData;
     
-    // Try multiple approaches to access the Directors sheet
+    // Try multiple approaches to access the Directors sheet (now with ISIN column)
     const directorsAttempts = [
-      'Directors!A2:E',
-      'Directors!A1:E', 
-      'Directors!A:E',
-      "'Directors'!A2:E",  // With quotes
-      'Sheet2!A2:E'        // Try by position
+      'Directors!A2:F',
+      'Directors!A1:F', 
+      'Directors!A:F',
+      "'Directors'!A2:F",  // With quotes
+      'Sheet2!A2:F'        // Try by position
     ];
     
     for (let i = 0; i < directorsAttempts.length; i++) {
@@ -468,14 +468,14 @@ async function fetchFromGoogleSheets(env) {
     console.log('📊 Fetching shareholders from Shareholders sheet...');
     let shareholdersData;
     
-    // Try multiple approaches to access the Shareholders sheet (now with 5 columns)
+    // Try multiple approaches to access the Shareholders sheet (now with ISIN column)
     const shareholdersAttempts = [
-      'Shareholders!A2:E',    // Skip header, 5 columns
-      'Shareholders!A1:E',    // Include header, 5 columns
-      'Shareholders!A:E',     // All rows, 5 columns
-      "'Shareholders'!A2:E",  // With quotes
-      'Sheet3!A2:E',          // Try by position
-      'Sheet3!A1:E',          // Try by position with header
+      'Shareholders!A2:F',    // Skip header, include ISIN
+      'Shareholders!A1:F',    // Include header, include ISIN
+      'Shareholders!A:F',     // All rows, include ISIN
+      "'Shareholders'!A2:F",  // With quotes
+      'Sheet3!A2:F',          // Try by position
+      'Sheet3!A1:F',          // Try by position with header
       'Shareholders!A2:Z',    // Wider range in case more columns
       'Sheet3!A2:Z'           // Wider range by position
     ];
@@ -686,11 +686,12 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
   
   console.log(`🔄 Transforming ${companyRows.length} companies, ${directorRows.length} directors, and ${shareholderRows.length} shareholders...`);
   
-  // Process directors data first
-  const directorsByCompany = {};
+  // Process directors data first - now using ISIN for matching
+  const directorsByISIN = {};
   directorRows.forEach((row, index) => {
     try {
       const companyName = row[0]?.trim();
+      const isin = row[5]?.trim(); // ISIN is now in column F (index 5)
       const director = {
         name: row[1] || '',
         position: row[2] || '',
@@ -698,26 +699,36 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
         bioUrl: row[4] || ''
       };
       
-      if (companyName && director.name) {
-        if (!directorsByCompany[companyName]) {
-          directorsByCompany[companyName] = [];
+      // Use ISIN as the primary key for matching
+      if (isin && director.name) {
+        if (!directorsByISIN[isin]) {
+          directorsByISIN[isin] = [];
         }
-        directorsByCompany[companyName].push(director);
+        directorsByISIN[isin].push(director);
+        console.log(`👥 Added director ${director.name} for ISIN ${isin} (${companyName})`);
+      } else if (companyName && director.name) {
+        // Fallback to company name if ISIN is missing
+        console.warn(`⚠️ Missing ISIN for director ${director.name} at ${companyName}, using company name as fallback`);
+        if (!directorsByISIN[companyName]) {
+          directorsByISIN[companyName] = [];
+        }
+        directorsByISIN[companyName].push(director);
       }
     } catch (error) {
       console.warn(`⚠️ Error parsing director row ${index + 2}:`, row, error.message);
     }
   });
   
-  console.log(`👥 Processed directors for ${Object.keys(directorsByCompany).length} companies`);
-  console.log(`📋 Director company names found:`, Object.keys(directorsByCompany));
+  console.log(`👥 Processed directors for ${Object.keys(directorsByISIN).length} companies`);
+  console.log(`📋 Director ISINs found:`, Object.keys(directorsByISIN));
   
-  // Process shareholders data
-  const shareholdersByCompany = {};
+  // Process shareholders data - now using ISIN for matching
+  const shareholdersByISIN = {};
   shareholderRows.forEach((row, index) => {
     try {
       const ticker = row[0]?.trim(); // Ticker (e.g., ACS.MC)
       const companyName = row[1]?.trim(); // Company name
+      const isin = row[5]?.trim(); // ISIN is now in column F (index 5)
       const shareholder = {
         name: row[2] || '', // Significant Shareholder  
         percentage: parseFloat(row[3]) || 0, // Ownership_percentage
@@ -727,29 +738,39 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
       console.log(`📊 Processing shareholder row ${index + 1}:`, {
         ticker,
         companyName,
+        isin,
         shareholderName: shareholder.name,
         percentage: shareholder.percentage,
         date: shareholder.date
       });
       
-      if (ticker && shareholder.name) {
-        if (!shareholdersByCompany[ticker]) {
-          shareholdersByCompany[ticker] = [];
+      // Use ISIN as the primary key for matching
+      if (isin && shareholder.name) {
+        if (!shareholdersByISIN[isin]) {
+          shareholdersByISIN[isin] = [];
         }
-        shareholdersByCompany[ticker].push(shareholder);
+        shareholdersByISIN[isin].push(shareholder);
+        console.log(`📊 Added shareholder ${shareholder.name} for ISIN ${isin} (${companyName})`);
+      } else if (ticker && shareholder.name) {
+        // Fallback to ticker if ISIN is missing
+        console.warn(`⚠️ Missing ISIN for shareholder ${shareholder.name} at ${companyName}, using ticker as fallback`);
+        if (!shareholdersByISIN[ticker]) {
+          shareholdersByISIN[ticker] = [];
+        }
+        shareholdersByISIN[ticker].push(shareholder);
       }
     } catch (error) {
       console.warn(`⚠️ Error parsing shareholder row ${index + 2}:`, row, error.message);
     }
   });
   
-  console.log(`📊 Processed shareholders for ${Object.keys(shareholdersByCompany).length} companies`);
-  console.log(`📋 Shareholder tickers found:`, Object.keys(shareholdersByCompany));
+  console.log(`📊 Processed shareholders for ${Object.keys(shareholdersByISIN).length} companies`);
+  console.log(`📋 Shareholder ISINs found:`, Object.keys(shareholdersByISIN));
   
   // Debug: Log first few shareholder entries
-  if (Object.keys(shareholdersByCompany).length > 0) {
-    const firstCompany = Object.keys(shareholdersByCompany)[0];
-    console.log(`📊 Sample shareholders for ${firstCompany}:`, JSON.stringify(shareholdersByCompany[firstCompany], null, 2));
+  if (Object.keys(shareholdersByISIN).length > 0) {
+    const firstCompany = Object.keys(shareholdersByISIN)[0];
+    console.log(`📊 Sample shareholders for ${firstCompany}:`, JSON.stringify(shareholdersByISIN[firstCompany], null, 2));
   }
   
   // Process companies and match with directors
@@ -769,73 +790,28 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
           high52: parseFinancialValue(row[9]), // Column J: High52
           low52: parseFinancialValue(row[10]), // Column K: Low52
           priceChange: parseFinancialValue(row[11]), // Column L: Price_Change
-          changePercent: null, // You don't have Price_Change_% column yet
+          changePercent: parseFinancialValue(row[12]), // Column M: Price_Change_percentage
+          isin: row[13] || '', // Column N: ISIN
           directors: [],
           shareholders: []
         };
         
-        // Try to match directors by company name variations
-        const companyNameVariations = [
-          company.company,
-          company.company.replace(/\s+(S\.A\.|SA|S\.L\.|SL)$/i, ''),
-          company.company.split(' ')[0] // First word only
-        ];
-        
-        // Add specific mappings for known mismatches
-        const specificMappings = {
-          'Aena': ['ENAIRE', 'AENA'],
-          'AENA': ['ENAIRE', 'Aena'],
-          'Banco Santander': ['Santander'],
-          'Banco Bilbao Vizcaya Argentaria': ['BBVA'],
-          'Telefónica': ['Telefonica']
-        };
-        
-        if (specificMappings[company.company]) {
-          companyNameVariations.push(...specificMappings[company.company]);
-        }
-        
-        console.log(`🔍 Trying to match company "${company.company}" with variations:`, companyNameVariations);
-        
-        // Also try reverse matching - check if company name appears in director company names
-        let matchedDirectors = null;
-        
-        // First try exact matches
-        for (const variation of companyNameVariations) {
-          if (directorsByCompany[variation]) {
-            matchedDirectors = directorsByCompany[variation];
-            console.log(`📋 Exact match: ${matchedDirectors.length} directors for ${company.company} (via "${variation}")`);
-            break;
-          }
-        }
-        
-        // If no exact match, try partial matching
-        if (!matchedDirectors) {
-          for (const directorCompanyName of Object.keys(directorsByCompany)) {
-            for (const variation of companyNameVariations) {
-              // Check if company name appears in director company name (case insensitive)
-              if (directorCompanyName.toLowerCase().includes(variation.toLowerCase()) ||
-                  variation.toLowerCase().includes(directorCompanyName.toLowerCase())) {
-                matchedDirectors = directorsByCompany[directorCompanyName];
-                console.log(`📋 Partial match: ${matchedDirectors.length} directors for ${company.company} (${variation} ↔ ${directorCompanyName})`);
-                break;
-              }
-            }
-            if (matchedDirectors) break;
-          }
-        }
-        
+        // Match directors using ISIN - much simpler and bulletproof!
+        const matchedDirectors = directorsByISIN[company.isin];
         if (matchedDirectors) {
           company.directors = matchedDirectors;
+          console.log(`📋 ISIN match: ${matchedDirectors.length} directors for ${company.company} (ISIN: ${company.isin})`);
+        } else {
+          console.log(`📋 No directors found for ${company.company} (ISIN: ${company.isin})`);
         }
         
-        // Match shareholders by ticker (exact match)
-        const matchedShareholders = shareholdersByCompany[company.ticker];
-        
+        // Match shareholders using ISIN - consistent with directors
+        const matchedShareholders = shareholdersByISIN[company.isin];
         if (matchedShareholders) {
           company.shareholders = matchedShareholders;
-          console.log(`📊 Ticker match: ${matchedShareholders.length} shareholders for ${company.company} (${company.ticker})`);
+          console.log(`📊 ISIN match: ${matchedShareholders.length} shareholders for ${company.company} (ISIN: ${company.isin})`);
         } else {
-          console.log(`📊 No shareholders found for ${company.company} (${company.ticker})`);
+          console.log(`📊 No shareholders found for ${company.company} (ISIN: ${company.isin})`);
         }
         
         return company;

@@ -387,18 +387,18 @@ export function EnhancedDashboard() {
                     .sort((a, b) => b.marketCapEur - a.marketCapEur)
                     .slice(0, 10)
                     .map(company => {
-                      const mockChange = SecureGoogleSheetsService.calculateMockChange();
+                      const changePercent = company.changePercent || 0;
                       return (
                         <div key={company.ticker} className="flex items-center gap-4">
                           <span className="w-20 text-sm font-medium">{company.formattedTicker || company.ticker}</span>
                           <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
                             <div
-                              className={`h-full ${mockChange.changePercent >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
-                              style={{ width: `${Math.abs(mockChange.changePercent) * 10}%` }}
+                              className={`h-full ${changePercent >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
+                              style={{ width: `${Math.abs(changePercent) * 10}%` }}
                             />
                           </div>
-                          <span className={`text-sm font-medium ${mockChange.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {mockChange.changePercent >= 0 ? '+' : ''}{mockChange.changePercent.toFixed(2)}%
+                          <span className={`text-sm font-medium ${changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
                           </span>
                         </div>
                       );

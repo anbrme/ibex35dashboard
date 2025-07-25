@@ -49,8 +49,7 @@ interface CompanyCardProps {
 }
 
 function CompanyCard({ company, isSelected, onToggle }: CompanyCardProps) {
-  const mockChange = useMemo(() => SecureGoogleSheetsService.calculateMockChange(), []);
-  const isPositive = mockChange.changePercent >= 0;
+  const isPositive = (company.changePercent || 0) >= 0;
 
   return (
     <Card 
@@ -98,7 +97,7 @@ function CompanyCard({ company, isSelected, onToggle }: CompanyCardProps) {
               ) : (
                 <TrendingDown className="w-3 h-3" />
               )}
-              {isPositive ? '+' : ''}{mockChange.changePercent.toFixed(2)}%
+              {isPositive ? '+' : ''}{(company.changePercent || 0).toFixed(2)}%
             </Badge>
           </div>
         </div>
@@ -476,7 +475,7 @@ export function ShadcnDashboard() {
                     .sort((a, b) => b.marketCapEur - a.marketCapEur)
                     .slice(0, 10)
                     .map(company => {
-                      const mockChange = SecureGoogleSheetsService.calculateMockChange();
+                      const changePercent = company.changePercent || 0;
                       return (
                         <Card key={company.ticker}>
                           <CardContent className="p-4">
@@ -486,13 +485,13 @@ export function ShadcnDashboard() {
                                 <div
                                   className={cn(
                                     "h-full transition-all",
-                                    mockChange.changePercent >= 0 ? "bg-green-500" : "bg-red-500"
+                                    changePercent >= 0 ? "bg-green-500" : "bg-red-500"
                                   )}
-                                  style={{ width: `${Math.abs(mockChange.changePercent) * 10}%` }}
+                                  style={{ width: `${Math.abs(changePercent) * 10}%` }}
                                 />
                               </div>
-                              <Badge variant={mockChange.changePercent >= 0 ? "default" : "destructive"}>
-                                {mockChange.changePercent >= 0 ? '+' : ''}{mockChange.changePercent.toFixed(2)}%
+                              <Badge variant={changePercent >= 0 ? "default" : "destructive"}>
+                                {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
                               </Badge>
                             </div>
                           </CardContent>
