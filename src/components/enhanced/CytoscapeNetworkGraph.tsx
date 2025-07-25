@@ -180,13 +180,19 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
 
     // Collect and consolidate directors and shareholders
     const directorsMap = new Map<string, {
-      director: any;
+      director: {
+        name: string;
+        position?: string;
+      };
       companies: Set<string>;
       allPositions: string[];
     }>();
     
     const shareholdersMap = new Map<string, {
-      shareholder: any;
+      shareholder: {
+        name: string;
+        percentage?: number;
+      };
       companies: Set<string>;
       totalPercentage: number;
     }>();
@@ -630,6 +636,18 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       node.addClass('highlighted');
       connectedNodes.addClass('highlighted');
       connectedEdges.addClass('highlighted');
+
+      // Display shareholder information
+      const data = node.data();
+      if (data.type === 'company') {
+        const company = data.company;
+        if (company.shareholders) {
+          const shareholderDetails = company.shareholders.map((s: { name: string; percentage?: number }) => `${s.name}: ${s.percentage || 0}%`).join('\n');
+          alert(`Shareholders of ${company.name}:\n${shareholderDetails}`);
+        } else {
+          alert(`No shareholder information available for ${company.name}.`);
+        }
+      }
     });
 
     cy.on('tap', (event) => {
