@@ -19,7 +19,7 @@ crons = ["0 * * * *"]
 
 [vars]
 GOOGLE_SHEET_ID = "11rpmdk6jWqwueio-aTJYoFBiNCmlnLhZ7jHPbvPrEJ0"
-WORKER_URL = "https://ibex35-sheets-api.your-subdomain.workers.dev"
+WORKER_URL = "https://ibex35-sheets-api.anurnberg.workers.dev"
 
 # Environment secrets (set via wrangler secret put)
 # GOOGLE_SERVICE_ACCOUNT_EMAIL
