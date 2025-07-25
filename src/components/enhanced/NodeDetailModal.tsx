@@ -15,6 +15,7 @@ interface NodeData {
     allPositions?: string[];
     companyCount?: number;
     appointmentDate?: string;
+    bioUrl?: string;
   };
   shareholder?: {
     name: string;
@@ -62,13 +63,32 @@ const Modal = styled.div<{ isOpen: boolean }>`
   background: white;
   border-radius: 20px;
   width: 90vw;
-  max-width: 800px;
-  max-height: 90vh;
+  max-width: 900px;
+  max-height: 95vh;
   overflow-y: auto;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
   transform: ${props => props.isOpen ? 'scale(1) translateY(0)' : 'scale(0.9) translateY(20px)'};
   transition: transform 0.3s ease;
   position: relative;
+  
+  /* Custom scrollbar for better appearance */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
 `;
 
 const Header = styled.div`
@@ -162,11 +182,32 @@ const WikipediaTitle = styled.h4`
   color: #1f2937;
 `;
 
-const WikipediaText = styled.p`
+const WikipediaText = styled.div`
   margin: 0 0 16px 0;
   color: #4b5563;
   line-height: 1.6;
   font-size: 14px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 8px;
+  
+  /* Custom scrollbar for biography text */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+  
+  &::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
 `;
 
 const WikipediaLink = styled.a`
@@ -274,25 +315,63 @@ export function NodeDetailModal({ isOpen, onClose, nodeData }: Props) {
       setError(null);
       
       try {
-        let searchTerm = '';
-        
-        if (nodeData.type === 'company' && nodeData.company) {
-          searchTerm = nodeData.company.company;
-        } else if (nodeData.type === 'director' && nodeData.director) {
-          searchTerm = nodeData.director.name;
-        } else if (nodeData.type === 'shareholder' && nodeData.shareholder) {
-          searchTerm = nodeData.shareholder.name;
+        // For directors, use local bio data or provide Spanish Wikipedia search
+        if (nodeData.type === 'director' && nodeData.director) {
+          const directorName = nodeData.director.name;
+          const bioUrl = nodeData.director.bioUrl;
+          
+          // If we have a bioUrl from Google Sheets, use it
+          if (bioUrl && bioUrl.trim() !== '') {
+            const bioData: WikipediaData = {
+              title: directorName,
+              summary: `${directorName} serves as ${nodeData.director.position || 'Director'}${nodeData.companies ? ` at ${nodeData.companies.join(', ')}` : ''}. Biographical information available from company records.`,
+              url: bioUrl,
+              extract: `Corporate director with detailed biographical information available.`
+            };
+            setWikipediaData(bioData);
+          } else {
+            // Fallback to Spanish Wikipedia search
+            const fallbackData: WikipediaData = {
+              title: directorName,
+              summary: `${directorName} serves as ${nodeData.director.position || 'Director'}${nodeData.companies ? ` at ${nodeData.companies.join(', ')}` : ''}. Use the link below to search for biographical information on Spanish Wikipedia.`,
+              url: `https://es.wikipedia.org/wiki/Special:Search/${encodeURIComponent(directorName)}`,
+              extract: `Corporate director with ${nodeData.director.companyCount || 1} board position${(nodeData.director.companyCount || 1) > 1 ? 's' : ''}.`
+            };
+            setWikipediaData(fallbackData);
+          }
+          
+          setIsLoading(false);
+          return;
         }
 
-        if (searchTerm) {
-          const data = nodeData.type === 'company' 
-            ? await wikipediaService.searchCompany(searchTerm)
-            : await wikipediaService.searchPerson(searchTerm);
-          setWikipediaData(data);
+        // For companies, try the existing Wikipedia search
+        if (nodeData.type === 'company' && nodeData.company) {
+          const data = await wikipediaService.searchCompany(nodeData.company.company);
+          if (data) {
+            setWikipediaData(data);
+          } else {
+            // Fallback for companies
+            const fallbackData: WikipediaData = {
+              title: nodeData.company.company,
+              summary: `Company information for ${nodeData.company.company}. Click the link below to search for more information on Spanish Wikipedia.`,
+              url: `https://es.wikipedia.org/wiki/Special:Search/${encodeURIComponent(nodeData.company.company)}`,
+              extract: `${nodeData.company.sector} company information available in the corporate network.`
+            };
+            setWikipediaData(fallbackData);
+          }
+        } else if (nodeData.type === 'shareholder' && nodeData.shareholder) {
+          // Fallback for shareholders
+          const fallbackData: WikipediaData = {
+            title: nodeData.shareholder.name,
+            summary: `Shareholder information for ${nodeData.shareholder.name}. Click the link below to search for more information on Spanish Wikipedia.`,
+            url: `https://es.wikipedia.org/wiki/Special:Search/${encodeURIComponent(nodeData.shareholder.name)}`,
+            extract: `${nodeData.shareholder.type || 'Shareholder'} information available in the corporate network.`
+          };
+          setWikipediaData(fallbackData);
         }
       } catch (err) {
-        setError('Failed to fetch Wikipedia data');
-        console.error('Wikipedia fetch error:', err);
+        setError('Failed to fetch information');
+        console.error('Data fetch error:', err);
       } finally {
         setIsLoading(false);
       }
@@ -647,7 +726,12 @@ export function NodeDetailModal({ isOpen, onClose, nodeData }: Props) {
                     }
                   </WikipediaText>
                   <WikipediaLink href={wikipediaData.url} target="_blank" rel="noopener noreferrer">
-                    Read more on Wikipedia
+                    {wikipediaData.url.includes('Special:Search') 
+                      ? 'Search on Spanish Wikipedia' 
+                      : wikipediaData.url.includes('wikipedia')
+                        ? 'Read more on Wikipedia'
+                        : 'View full biography'
+                    }
                     <ExternalLink size={14} />
                   </WikipediaLink>
                 </WikipediaContent>

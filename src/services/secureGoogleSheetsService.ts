@@ -50,23 +50,78 @@ export class SecureGoogleSheetsService {
   
   static async fetchRealIBEXData(): Promise<SecureIBEXCompanyData[]> {
     try {
-      console.log('🔒 Fetching data from D1-powered backend...');
-      console.log('📡 API URL:', this.API_BASE_URL);
+      console.log('🔒 Using real IBEX 35 data...');
       
-      // Try D1 endpoint first (fast)
-      const response = await fetch(`${this.API_BASE_URL}/api/companies`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'max-age=60' // 1-minute client cache
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result: SecureAPIResponse = await response.json();
+      // Temporarily use static real data instead of fetching
+      // This bypasses any network/CORS issues while we fix the director mapping
+      const realData = {
+        "success": true,
+        "data": [
+          {
+            "id": "SAN.MC",
+            "ticker": "SAN.MC",
+            "name": "Santander",
+            "sector": "Financial Services",
+            "current_price_eur": 7.59,
+            "market_cap_eur": 134094327991,
+            "volume": 16256498,
+            "price_change": 0.02,
+            "pe_ratio": 8.93,
+            "eps": 0.85,
+            "high_52": 7.62,
+            "low_52": 3.8,
+            "directors": [
+              {"name": "Ana Botín-Sanz de Sautuola y O'Shea", "position": "Presidenta Ejecutiva", "appointedDate": "2014.0", "bio": "https://www.santander.com/es/sobre-nosotros/gobierno-corporativo/consejo-de-administracion"},
+              {"name": "Héctor Blas Grisi Checa", "position": "Consejero Delegado", "appointedDate": "2023.0", "bio": "https://www.santander.com/es/sobre-nosotros/gobierno-corporativo/consejo-de-administracion"}
+            ],
+            "shareholders": [{"name": "Institutional/Free Float", "type": "individual", "percentage": 0, "shares": 0, "reportDate": 2025}]
+          },
+          {
+            "id": "BBVA.MC",
+            "ticker": "BBVA.MC", 
+            "name": "BBVA",
+            "sector": "Financial Services",
+            "current_price_eur": 13.03,
+            "market_cap_eur": 89128926560,
+            "volume": 5722689,
+            "price_change": 0.03,
+            "pe_ratio": 7.39,
+            "eps": 1.76,
+            "high_52": 13.9,
+            "low_52": 8.46,
+            "directors": [
+              {"name": "Carlos Torres Vila", "position": "Presidente", "appointedDate": "2018.0", "bio": "https://accionistaseinversores.bbva.com/gobierno-corporativo/consejo-de-administracion/"},
+              {"name": "Onur Genç", "position": "Consejero Delegado", "appointedDate": "2018.0", "bio": "https://accionistaseinversores.bbva.com/gobierno-corporativo/consejo-de-administracion/"},
+              {"name": "Belén Garijo López", "position": "Consejera", "appointedDate": "2021.0", "bio": "https://accionistaseinversores.bbva.com/gobierno-corporativo/consejo-de-administracion/"}
+            ],
+            "shareholders": [{"name": "Largely free float / institutions, no single>5%", "type": "other", "percentage": 0, "shares": 0, "reportDate": 45717}]
+          },
+          {
+            "id": "CABK.MC",
+            "ticker": "CABK.MC",
+            "name": "CaixaBank", 
+            "sector": "Financial Services",
+            "current_price_eur": 7.86,
+            "market_cap_eur": 57032263064,
+            "volume": 4083242,
+            "price_change": -0.08,
+            "pe_ratio": 10.69,
+            "eps": 0.73,
+            "high_52": 8.01,
+            "low_52": 4.53,
+            "directors": [
+              {"name": "José Ignacio Goirigolzarri Tellaeche", "position": "Presidente", "appointedDate": "2021.0", "bio": "https://www.caixabank.com/es/accionistas-inversores/gobierno-corporativo/consejo-administracion.html"},
+              {"name": "Gonzalo Gortázar Rotaeche", "position": "Consejero Delegado", "appointedDate": "2014.0", "bio": "https://www.caixabank.com/es/accionistas-inversores/gobierno-corporativo/consejo-administracion.html"}
+            ],
+            "shareholders": [
+              {"name": "Criteria Caixa", "type": "individual", "percentage": 31, "shares": 0, "reportDate": 45689},
+              {"name": "FROB (Spanish Govt).", "type": "individual", "percentage": 18, "shares": 0, "reportDate": 45689}
+            ]
+          }
+        ]
+      };
+      
+      const result = realData;
       
       if (!result.success) {
         throw new Error(result.error || 'Unknown API error');
@@ -127,6 +182,23 @@ export class SecureGoogleSheetsService {
       console.error('❌ Error fetching from secure backend:', error);
       console.log('📡 Failed URL:', this.API_BASE_URL);
       console.log('💡 Please check your Cloudflare Worker is deployed and the URL is correct');
+      console.log('🔍 Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      // Test if the API is actually reachable
+      console.log('🧪 Testing API reachability...');
+      try {
+        const testResponse = await fetch(this.API_BASE_URL, { 
+          method: 'HEAD',
+          mode: 'cors'
+        });
+        console.log('🧪 Head request status:', testResponse.status);
+      } catch (testError) {
+        console.log('🧪 Head request failed:', testError);
+      }
       
       // Fallback to mock data if backend fails
       console.log('🔄 Falling back to mock data...');

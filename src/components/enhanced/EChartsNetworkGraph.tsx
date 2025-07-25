@@ -17,6 +17,7 @@ interface NodeData {
     allPositions?: string[];
     companyCount?: number;
     appointmentDate?: string;
+    bioUrl?: string;
   };
   shareholder?: {
     name: string;
@@ -50,6 +51,7 @@ interface EChartsNode {
     companies: string[];
     allPositions: string[];
     appointmentDate?: string;
+    bioUrl?: string;
   };
   shareholderData?: {
     name: string;
@@ -76,6 +78,7 @@ interface DirectorData {
   name: string;
   position?: string;
   appointmentDate?: string;
+  bioUrl?: string;
 }
 
 interface ShareholderData {
@@ -369,7 +372,8 @@ export function EChartsNetworkGraph({ companies, selectedCompanyIds }: Props) {
           ...directorData.director,
           companyCount,
           companies: Array.from(directorData.companies),
-          allPositions: directorData.allPositions
+          allPositions: directorData.allPositions,
+          bioUrl: directorData.director.bioUrl
         }
       });
 
@@ -578,7 +582,8 @@ export function EChartsNetworkGraph({ companies, selectedCompanyIds }: Props) {
             position: data.directorData.allPositions?.join(', '),
             allPositions: data.directorData.allPositions,
             companyCount: data.directorData.companyCount,
-            appointmentDate: data.directorData.appointmentDate
+            appointmentDate: data.directorData.appointmentDate,
+            bioUrl: data.directorData.bioUrl
           },
           companies: data.directorData.companies
         }
