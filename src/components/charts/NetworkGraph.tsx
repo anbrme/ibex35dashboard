@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
+import type { BaseType } from 'd3';
 import type { SecureIBEXCompanyData } from '../../services/secureGoogleSheetsService';
 
 interface NetworkGraphProps {
@@ -39,9 +40,22 @@ export function NetworkGraph({ companies, selectedCompany }: NetworkGraphProps) 
     const width = 800;
     const height = 500;
 
+    // Define color scale for sectors
+    const colorScale = d3.scaleOrdinal<string>()
+      .domain(companies.map(c => c.sector || ''))
+      .range(d3.schemeCategory10);
+
     // Create nodes and links
     const nodes: Node[] = [];
     const links: Link[] = [];
+
+    // Define force simulation
+    const simulation = d3.forceSimulation<Node>()
+      .force('link', d3.forceLink<Node, Link>().id(d => d.id).strength(d => (d as Link).strength))
+      .force('charge', d3.forceManyBody().strength(-200))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide<Node>().radius(d => d.size + 5));
+
 
     // Add company nodes
     companies.forEach(company => {
@@ -89,7 +103,50 @@ export function NetworkGraph({ companies, selectedCompany }: NetworkGraphProps) 
       });
     });
 
-    // Add cross-board connections (weak links between companies sharing directors)
+    // Add nodes to the SVG
+    const nodeElements = svg.append('g')
+      .selectAll('circle')
+      .data(nodes)
+      .enter().append('circle')
+      .attr('r', d => d.size)
+      .attr('fill', d => d.type === 'company' ? colorScale(d.sector || '') : '#ccc')
+      .call(d3.drag<SVGCircleElement, Node>()
+        .on('start', (event, d) => {
+          if (!event.active) simulation.alphaTarget(0.3).restart();
+          (d as Node).fx = d.x;
+          (d as Node).fy = d.y;
+        })
+        .on('drag', (event, d) => {
+          (d as Node).fx = event.x;
+          (d as Node).fy = event.y;
+        })
+        .on('end', (event, d) => {
+          if (!event.active) simulation.alphaTarget(0);
+          (d as Node).fx = null;
+          (d as Node).fy = null;
+        }));
+
+    // Add links to the SVG
+    const linkElements = svg.append('g')
+      .selectAll('line')
+      .data(links)
+      .enter().append('line')
+      .attr('stroke-width', 1)
+      .attr('stroke', '#999')
+      .attr('stroke-dasharray', d => d.strength < 1 ? '4 2' : 'none');
+
+    // Update simulation on tick
+    simulation.on('tick', () => {
+      nodeElements
+        .attr('cx', d => d.x!)
+        .attr('cy', d => d.y!);
+
+      linkElements
+        .attr('x1', d => (d.source as Node).x!)
+        .attr('y1', d => (d.source as Node).y!)
+        .attr('x2', d => (d.target as Node).x!)
+        .attr('y2', d => (d.target as Node).y!);
+    });
     directorCompanies.forEach((companyList) => {
       if (companyList.length > 1) {
         for (let i = 0; i < companyList.length - 1; i++) {
@@ -104,15 +161,7 @@ export function NetworkGraph({ companies, selectedCompany }: NetworkGraphProps) 
       }
     });
 
-    // Set up the simulation
-    const simulation = d3.forceSimulation<Node>(nodes)
-      .force("link", d3.forceLink<Node, Link>(links).id(d => d.id).strength(d => d.strength))
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(d => (d as Node).size + 2));
 
-    // Color scale for different sectors
-    const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
 
     // Create links
     const link = svg.append("g")
@@ -193,7 +242,7 @@ export function NetworkGraph({ companies, selectedCompany }: NetworkGraphProps) 
       });
 
     // Add drag behavior
-    const drag = d3.drag<any, Node>()
+    const drag = d3.drag<SVGCircleElement, Node>()
       .on("start", (event, d) => {
         if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.x;
@@ -209,7 +258,7 @@ export function NetworkGraph({ companies, selectedCompany }: NetworkGraphProps) 
         d.fy = null;
       });
 
-    node.call(drag as any);
+    node.call(drag as unknown as (selection: d3.Selection<BaseType | SVGCircleElement, Node, SVGGElement, unknown>) => void);
 
     // Add tooltips
     const tooltip = d3.select("body").append("div")
@@ -243,7 +292,19 @@ export function NetworkGraph({ companies, selectedCompany }: NetworkGraphProps) 
           `);
         }
       })
-      .on("mousemove", (event: any) => {
+      .on("click", (_, d) => {
+        if (d.type === 'company') {
+          const company = companies.find(c => c.ticker === d.id);
+          if (company) {
+            if (company.shareholders) {
+              alert(`Shareholders of ${company.company}:\n` + company.shareholders.map(s => s.name).join('\n'));
+            } else {
+              alert(`No shareholder information available for ${company.company}.`);
+            }
+          }
+        }
+      })
+      .on("mousemove", (event: MouseEvent) => {
         tooltip
           .style("top", (event.pageY - 10) + "px")
           .style("left", (event.pageX + 10) + "px");

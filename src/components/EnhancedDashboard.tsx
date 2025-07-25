@@ -1,4 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { NewsService } from '../services/newsService';
+import { LobbyingService } from '../services/lobbyingService';
+import type { CompanyNews, LobbyingMeeting } from '../types/database';
 import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3 } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
 import { SimpleNetworkGraph } from './enhanced/SimpleNetworkGraph';
@@ -14,9 +17,11 @@ import { ModernCompanyCard } from './enhanced/ModernCompanyCard';
 // Main enhanced dashboard component
 export function EnhancedDashboard() {
   const [companies, setCompanies] = useState<SecureIBEXCompanyData[]>([]);
+  const [news, setNews] = useState<CompanyNews[]>([]);
+  const [lobbyingMeetings, setLobbyingMeetings] = useState<LobbyingMeeting[]>([]);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeView, setActiveView] = useState<'network' | 'sectors' | 'performance' | 'directors'>('network');
+  const [activeView, setActiveView] = useState<'network' | 'sectors' | 'performance' | 'directors' | 'news' | 'lobbying'>('network');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string>('');
@@ -24,6 +29,7 @@ export function EnhancedDashboard() {
   // Load initial data
   useEffect(() => {
     fetchData();
+    fetchNewsAndLobbyingData();
   }, []);
 
   const fetchData = async () => {
@@ -36,6 +42,18 @@ export function EnhancedDashboard() {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchNewsAndLobbyingData = async () => {
+    try {
+      const newsData = await NewsService.fetchMarketNews();
+      setNews(newsData);
+
+      const lobbyingData = await LobbyingService.fetchLobbyingData();
+      setLobbyingMeetings(lobbyingData);
+    } catch (err) {
+      console.error('Error fetching news or lobbying data:', err);
     }
   };
 
@@ -95,8 +113,35 @@ export function EnhancedDashboard() {
     };
   }, [companies, selectedCompanyIds]);
 
+  const renderNews = () => (
+    <div>
+      <h2>News</h2>
+      {news.map((item) => (
+        <div key={item.id}>
+          <h3>{item.title}</h3>
+          <p>{item.summary}</p>
+          <a href={item.url} target="_blank" rel="noopener noreferrer">Read more</a>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderLobbying = () => (
+    <div>
+      <h2>Lobbying Meetings</h2>
+      {lobbyingMeetings.map((meeting) => (
+        <div key={meeting.id}>
+          <p>Organization: {meeting.organizationName}</p>
+          <p>Date: {meeting.meetingDate.toDateString()}</p>
+          <p>Purpose: {meeting.purpose}</p>
+          <p>Topics: {meeting.topics.join(', ')}</p>
+        </div>
+      ))}
+    </div>
+  );
+
   if (loading) {
-    return (
+    return activeView === 'news' ? renderNews() : activeView === 'lobbying' ? renderLobbying() : (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         <div className="text-center">
           <div className="relative">
@@ -273,7 +318,7 @@ export function EnhancedDashboard() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveView(tab.id as any)}
+                  onClick={() => setActiveView(tab.id as 'network' | 'sectors' | 'performance' | 'directors' | 'news' | 'lobbying')}
                   className={`group flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                     isActive 
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 

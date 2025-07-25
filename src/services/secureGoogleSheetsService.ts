@@ -74,6 +74,9 @@ export class SecureGoogleSheetsService {
 
       const rawCompanies = result.data || [];
       console.log(`✅ Successfully loaded ${rawCompanies.length} companies from secure backend`);
+      rawCompanies.forEach((rawCompany: any) => {
+        console.log(`Ticker: ${rawCompany.ticker}, Change Percent: ${rawCompany.change_percent || rawCompany.changePercent}`);
+      });
       console.log(`📊 Last updated: ${result.lastUpdated}`);
       
       // Transform API response to match frontend interface
