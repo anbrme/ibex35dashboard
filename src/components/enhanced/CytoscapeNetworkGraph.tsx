@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import styled from 'styled-components';
 import { RotateCcw, ZoomIn, ZoomOut, Maximize2, Minimize2, Focus, Settings, Filter } from 'lucide-react';
@@ -311,40 +311,6 @@ const FilterInput = styled.input`
   }
 `;
 
-const SearchContainer = styled.div`
-  position: relative;
-`;
-
-const SuggestionsList = styled.div<{ isVisible: boolean }>`
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-top: none;
-  border-radius: 0 0 6px 6px;
-  max-height: 120px;
-  overflow-y: auto;
-  z-index: 1000;
-  display: ${props => props.isVisible ? 'block' : 'none'};
-`;
-
-const SuggestionItem = styled.div`
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 12px;
-  border-bottom: 1px solid #f3f4f6;
-  
-  &:hover {
-    background: #f8fafc;
-  }
-  
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
 export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -355,9 +321,6 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
   const [currentLayout, setCurrentLayout] = useState('cose');
   const [minDirectorCompanies, setMinDirectorCompanies] = useState(1);
   const [minShareholderPercentage, setMinShareholderPercentage] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; visible: boolean }>({
     x: 0, y: 0, text: '', visible: false
   });
@@ -404,64 +367,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     return networkAnalyticsService.calculateNetworkMetrics(companies);
   }, [companies]);
 
-  // Create autocomplete suggestions from all available names
-  const allNames = useMemo(() => {
-    const names = new Set<string>();
-    
-    // Add company names
-    companies.forEach(company => {
-      if (company.company) names.add(company.company);
-      if (company.ticker) names.add(company.ticker);
-    });
-    
-    // Add director names
-    companies.forEach(company => {
-      if (company.directors) {
-        company.directors.forEach(director => {
-          if (director.name) names.add(director.name);
-        });
-      }
-    });
-    
-    // Add shareholder names
-    companies.forEach(company => {
-      if (company.shareholders) {
-        company.shareholders.forEach(shareholder => {
-          if (shareholder.name) names.add(shareholder.name);
-        });
-      }
-    });
-    
-    return Array.from(names).sort();
-  }, [companies]);
-
-  // Handle search input and suggestions
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
-    
-    if (value.length > 1) {
-      const filtered = allNames.filter(name => 
-        name.toLowerCase().includes(value.toLowerCase())
-      ).slice(0, 8); // Limit to 8 suggestions
-      
-      setSearchSuggestions(filtered);
-      setShowSuggestions(filtered.length > 0);
-    } else {
-      setSearchSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  const selectSuggestion = (suggestion: string) => {
-    setSearchTerm(suggestion);
-    setShowSuggestions(false);
-  };
-
-  // Check if a name matches search term
-  const matchesSearch = useCallback((name: string) => {
-    if (!searchTerm) return true;
-    return name.toLowerCase().includes(searchTerm.toLowerCase());
-  }, [searchTerm]);
+  // Use user-defined filters instead of auto-simplification
 
   useEffect(() => {
     if (!containerRef.current || !companies || companies.length === 0) return;
@@ -595,14 +501,9 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       }
     });
 
-    // Add company nodes (with search filtering)
+    // Add company nodes
     relevantCompanies.forEach(company => {
       if (company && company.ticker) {
-        // Filter by search term
-        if (!matchesSearch(company.company || '') && !matchesSearch(company.ticker || '')) {
-          return; // Skip companies that don't match search
-        }
-        
         const baseColor = selectedCompanyIds.has(company.ticker) ? '#3b82f6' : '#6366f1';
         const enhancedSize = getEnhancedNodeSize(baseCompanySize, company.ticker);
         const enhancedColor = getEnhancedNodeColor(baseColor, company.ticker, 'company');
@@ -631,11 +532,6 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       // Filter directors based on user settings
       if (companyCount < minDirectorCompanies) {
         return; // Skip directors below threshold
-      }
-      
-      // Filter by search term
-      if (!matchesSearch(director.name)) {
-        return; // Skip directors that don't match search
       }
       
       // Base color and size
@@ -688,11 +584,6 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       // Filter shareholders based on user settings
       if (totalPercentage < minShareholderPercentage) {
         return; // Skip shareholders below threshold
-      }
-      
-      // Filter by search term
-      if (!matchesSearch(shareholder.name)) {
-        return; // Skip shareholders that don't match search
       }
       
       // Base color and size
@@ -1127,7 +1018,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         console.error('Cytoscape cleanup error:', error);
       }
     };
-  }, [companies, selectedCompanyIds, networkAnalysis, minDirectorCompanies, minShareholderPercentage, searchTerm, isFullscreen, currentLayout, matchesSearch]);
+  }, [companies, selectedCompanyIds, networkAnalysis, minDirectorCompanies, minShareholderPercentage, isFullscreen, currentLayout]);
 
   const handleZoomIn = () => {
     if (cyRef.current) {
@@ -1252,30 +1143,6 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
           <Filter size={14} />
           Network Filters
         </FilterTitle>
-        
-        <FilterGroup>
-          <FilterLabel>Search Names</FilterLabel>
-          <SearchContainer>
-            <FilterInput
-              type="text"
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              onFocus={() => setShowSuggestions(searchSuggestions.length > 0)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              placeholder="Company, director, or shareholder..."
-            />
-            <SuggestionsList isVisible={showSuggestions}>
-              {searchSuggestions.map((suggestion, index) => (
-                <SuggestionItem
-                  key={index}
-                  onMouseDown={() => selectSuggestion(suggestion)}
-                >
-                  {suggestion}
-                </SuggestionItem>
-              ))}
-            </SuggestionsList>
-          </SearchContainer>
-        </FilterGroup>
         
         <FilterGroup>
           <FilterLabel>Min. Director Companies</FilterLabel>
