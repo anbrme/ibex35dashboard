@@ -38,10 +38,11 @@ const pulse = keyframes`
 
 // Styled components
 const Container = styled.div<{ $panelVisible: boolean }>`
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 50%, #581c87 100%);
   transition: all 0.3s ease;
+  overflow: hidden;
 `;
 
 const LeftPanel = styled.div<{ $isVisible: boolean; $isFullscreen: boolean }>`
@@ -417,8 +418,10 @@ const RightPanel = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100vh;
   min-height: 100vh;
   position: relative;
+  overflow: hidden;
 `;
 
 const PanelToggle = styled.button<{ $isVisible: boolean }>`
@@ -551,7 +554,7 @@ const TabDescription = styled.div`
 const VisualizationArea = styled.div`
   flex: 1;
   padding: 16px 24px 8px 24px;
-  min-height: 60vh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 `;
