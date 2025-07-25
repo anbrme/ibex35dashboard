@@ -88,7 +88,7 @@ export class SecureGoogleSheetsService {
         currentPriceEur: rawCompany.current_price_eur || rawCompany.currentPriceEur || 0,
         marketCapEur: rawCompany.market_cap_eur || rawCompany.marketCapEur || 0,
         volumeEur: rawCompany.volume || rawCompany.volumeEur || 0,
-        changePercent: rawCompany.change_percent || rawCompany.changePercent || 0,
+        changePercent: rawCompany.price_change_percentage || 0,
         priceChange: rawCompany.price_change || rawCompany.priceChange || 0,
         peRatio: rawCompany.pe_ratio || rawCompany.peRatio || null,
         eps: rawCompany.eps || null,

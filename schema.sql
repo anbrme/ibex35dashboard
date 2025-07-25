@@ -12,7 +12,7 @@ CREATE TABLE companies (
   current_price_eur REAL,
   market_cap_eur INTEGER,
   volume INTEGER,
-  change_percent REAL,
+  price_change_percentage REAL,
   price_change REAL,
   pe_ratio REAL,
   eps REAL,
