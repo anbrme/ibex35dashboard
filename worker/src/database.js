@@ -117,7 +117,105 @@ export class DatabaseService {
     }
   }
 
-  // Get all companies with directors
+  // Sync shareholders data
+  async syncShareholdersData(companiesWithShareholders) {
+    try {
+      const shareholdersStmt = this.db.prepare(`
+        INSERT OR REPLACE INTO company_shareholders (
+          id, company_id, name, type, percentage, shares, report_date, is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const allShareholders = [];
+
+      // Extract all shareholders
+      companiesWithShareholders.forEach(company => {
+        if (company.shareholders && company.shareholders.length > 0) {
+          company.shareholders.forEach(shareholder => {
+            const shareholderId = `shareholder_${company.ticker}_${shareholder.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
+            
+            allShareholders.push({
+              id: shareholderId,
+              companyId: company.ticker,
+              name: shareholder.name,
+              type: this.determineShareholderType(shareholder.name),
+              percentage: parseFloat(shareholder.percentage) || 0,
+              shares: parseInt(shareholder.shares) || 0,
+              reportDate: shareholder.date || new Date().toISOString().split('T')[0],
+              isActive: true
+            });
+          });
+        }
+      });
+
+      console.log(`📊 Processing ${allShareholders.length} shareholders`);
+
+      if (allShareholders.length > 0) {
+        const shareholdersBatch = allShareholders.map(shareholder =>
+          shareholdersStmt.bind(
+            shareholder.id,
+            shareholder.companyId,
+            shareholder.name,
+            shareholder.type,
+            shareholder.percentage,
+            shareholder.shares,
+            shareholder.reportDate,
+            shareholder.isActive
+          )
+        );
+        
+        const shareholdersResults = await this.db.batch(shareholdersBatch);
+        console.log(`✅ Inserted ${shareholdersResults.length} shareholders`);
+        
+        return {
+          success: true,
+          shareholdersProcessed: shareholdersResults.length
+        };
+      }
+
+      return {
+        success: true,
+        shareholdersProcessed: 0
+      };
+    } catch (error) {
+      console.error('❌ Error syncing shareholders:', error);
+      throw error;
+    }
+  }
+
+  // Helper function to determine shareholder type
+  determineShareholderType(name) {
+    const lowerName = name.toLowerCase();
+    
+    if (lowerName.includes('blackrock') || lowerName.includes('vanguard') || 
+        lowerName.includes('fidelity') || lowerName.includes('state street') ||
+        lowerName.includes('capital') || lowerName.includes('fund') ||
+        lowerName.includes('asset') || lowerName.includes('management')) {
+      return 'institutional';
+    }
+    
+    if (lowerName.includes('government') || lowerName.includes('state') ||
+        lowerName.includes('ministry') || lowerName.includes('treasury')) {
+      return 'government';
+    }
+    
+    if (lowerName.includes('insider') || lowerName.includes('executive') ||
+        lowerName.includes('director') || lowerName.includes('ceo') ||
+        lowerName.includes('president')) {
+      return 'insider';
+    }
+    
+    // If it contains common individual name patterns, classify as individual
+    if (lowerName.split(' ').length <= 3 && !lowerName.includes('inc') && 
+        !lowerName.includes('ltd') && !lowerName.includes('corp') &&
+        !lowerName.includes('sa') && !lowerName.includes('sl')) {
+      return 'individual';
+    }
+    
+    return 'other';
+  }
+
+  // Get all companies with directors and shareholders
   async getAllCompaniesWithDirectors() {
     const companies = await this.db.prepare(`
       SELECT 
@@ -126,13 +224,26 @@ export class DatabaseService {
         c.price_change, c.pe_ratio, c.eps, c.high_52, c.low_52,
         c.dividend_yield, c.website, c.created_at, c.updated_at,
         json_group_array(
-          json_object(
+          DISTINCT json_object(
             'name', p.name,
             'position', bp.position,
             'appointedDate', bp.appointed_date,
             'bio', p.bio
           )
-        ) FILTER (WHERE p.id IS NOT NULL) as directors
+        ) FILTER (WHERE p.id IS NOT NULL) as directors,
+        (
+          SELECT json_group_array(
+            json_object(
+              'name', cs.name,
+              'type', cs.type,
+              'percentage', cs.percentage,
+              'shares', cs.shares,
+              'reportDate', cs.report_date
+            )
+          )
+          FROM company_shareholders cs
+          WHERE cs.company_id = c.id AND cs.is_active = 1
+        ) as shareholders
       FROM companies c
       LEFT JOIN board_positions bp ON c.id = bp.company_id
       LEFT JOIN people p ON bp.person_id = p.id
@@ -142,11 +253,12 @@ export class DatabaseService {
 
     return companies.results.map(company => ({
       ...company,
-      directors: company.directors ? JSON.parse(company.directors) : []
+      directors: company.directors ? JSON.parse(company.directors) : [],
+      shareholders: company.shareholders ? JSON.parse(company.shareholders) : []
     }));
   }
 
-  // Get company with directors by ticker
+  // Get company with directors and shareholders by ticker
   async getCompanyByTicker(ticker) {
     const result = await this.db.prepare(`
       SELECT 
@@ -155,13 +267,26 @@ export class DatabaseService {
         c.price_change, c.pe_ratio, c.eps, c.high_52, c.low_52,
         c.dividend_yield, c.website, c.created_at, c.updated_at,
         json_group_array(
-          json_object(
+          DISTINCT json_object(
             'name', p.name,
             'position', bp.position,
             'appointedDate', bp.appointed_date,
             'bio', p.bio
           )
-        ) FILTER (WHERE p.id IS NOT NULL) as directors
+        ) FILTER (WHERE p.id IS NOT NULL) as directors,
+        (
+          SELECT json_group_array(
+            json_object(
+              'name', cs.name,
+              'type', cs.type,
+              'percentage', cs.percentage,
+              'shares', cs.shares,
+              'reportDate', cs.report_date
+            )
+          )
+          FROM company_shareholders cs
+          WHERE cs.company_id = c.id AND cs.is_active = 1
+        ) as shareholders
       FROM companies c
       LEFT JOIN board_positions bp ON c.id = bp.company_id
       LEFT JOIN people p ON bp.person_id = p.id
@@ -173,7 +298,8 @@ export class DatabaseService {
 
     return {
       ...result,
-      directors: result.directors ? JSON.parse(result.directors) : []
+      directors: result.directors ? JSON.parse(result.directors) : [],
+      shareholders: result.shareholders ? JSON.parse(result.shareholders) : []
     };
   }
 

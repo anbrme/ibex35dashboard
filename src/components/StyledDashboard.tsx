@@ -4,6 +4,7 @@ import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Spar
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
 import { CytoscapeNetworkGraph } from './enhanced/CytoscapeNetworkGraph';
 import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
+import { ShareholdersAnalysisPanel } from './ShareholdersAnalysisPanel';
 import { ComprehensiveInsights } from './insights/ComprehensiveInsights';
 
 // Global styles
@@ -665,7 +666,7 @@ export function StyledDashboard() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(new Set());
   const [expandedCompanyIds, setExpandedCompanyIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeView, setActiveView] = useState<'network' | 'sectors' | 'performance' | 'directors' | 'insights'>('network');
+  const [activeView, setActiveView] = useState<'network' | 'sectors' | 'performance' | 'directors' | 'shareholders' | 'insights'>('network');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string>('');
@@ -1056,6 +1057,7 @@ export function StyledDashboard() {
                 { id: 'sectors', label: 'Sectors', icon: PieChart, description: 'Market distribution' },
                 { id: 'performance', label: 'Performance', icon: LineChart, description: 'Price analysis' },
                 { id: 'directors', label: 'Directors', icon: Users, description: 'Board analysis' },
+                { id: 'shareholders', label: 'Shareholders', icon: TrendingUp, description: 'Ownership structure' },
                 { id: 'insights', label: 'Financial Insights', icon: BarChart3, description: 'Advanced analytics' },
               ].map((tab) => {
                 const IconComponent = tab.icon;
@@ -1147,6 +1149,8 @@ export function StyledDashboard() {
                 )}
                 
                 {activeView === 'directors' && <DirectorsAnalysisPanel companies={companies} selectedCompanyIds={selectedCompanyIds} />}
+                
+                {activeView === 'shareholders' && <ShareholdersAnalysisPanel companies={companies} selectedCompanyIds={selectedCompanyIds} />}
                 
                 {activeView === 'insights' && <ComprehensiveInsights companies={companies} selectedCompanyIds={selectedCompanyIds} />}
               </VisualizationContent>

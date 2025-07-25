@@ -78,6 +78,7 @@ export default {
       // Sync to D1
       const companiesResult = await db.syncCompaniesData(companiesData);
       const directorsResult = await db.syncDirectorsData(companiesData);
+      const shareholdersResult = await db.syncShareholdersData(companiesData);
       
       // Log sync operation
       await db.logSyncOperation('scheduled_sync', companiesData.length, 'completed');
@@ -93,7 +94,7 @@ export default {
           method: 'POST',  
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text: `IBEX 35 Scheduled Sync Complete: ${companiesResult.recordsProcessed} companies, ${directorsResult.peopleProcessed} directors`
+            text: `IBEX 35 Scheduled Sync Complete: ${companiesResult.recordsProcessed} companies, ${directorsResult.peopleProcessed} directors, ${shareholdersResult.shareholdersProcessed} shareholders`
           })
         });
       }
@@ -156,6 +157,7 @@ async function handleDataSync(db, env, request) {
     // Sync to D1
     const companiesResult = await db.syncCompaniesData(companiesData);
     const directorsResult = await db.syncDirectorsData(companiesData);
+    const shareholdersResult = await db.syncShareholdersData(companiesData);
     
     // Log sync operation
     await db.logSyncOperation('full_sync', companiesData.length, 'completed');
@@ -165,7 +167,8 @@ async function handleDataSync(db, env, request) {
       message: 'Data sync completed',
       results: {
         companies: companiesResult,
-        directors: directorsResult
+        directors: directorsResult,
+        shareholders: shareholdersResult
       },
       timestamp: new Date().toISOString()
     }), {
@@ -344,11 +347,40 @@ async function fetchFromGoogleSheets(env) {
       }
     }
     
+    console.log('📊 Fetching shareholders from Shareholders sheet...');
+    let shareholdersData;
+    
+    // Try multiple approaches to access the Shareholders sheet
+    const shareholdersAttempts = [
+      'Shareholders!A2:D',
+      'Shareholders!A1:D', 
+      'Shareholders!A:D',
+      "'Shareholders'!A2:D",  // With quotes
+      'Sheet3!A2:D'           // Try by position
+    ];
+    
+    for (let i = 0; i < shareholdersAttempts.length; i++) {
+      const range = shareholdersAttempts[i];
+      try {
+        console.log(`🔍 Attempting to fetch shareholders with range: ${range}`);
+        shareholdersData = await fetchGoogleSheetsData(SHEET_ID, accessToken, range);
+        console.log(`✅ Successfully fetched shareholders with range: ${range}`);
+        break;
+      } catch (error) {
+        console.warn(`⚠️ Failed to fetch with range ${range}:`, error.message);
+        if (i === shareholdersAttempts.length - 1) {
+          console.error('❌ All attempts to fetch Shareholders sheet failed');
+          shareholdersData = { values: [] };
+        }
+      }
+    }
+    
     console.log(`📋 Companies data rows: ${companiesData.values?.length || 0}`);
     console.log(`👥 Directors data rows: ${directorsData.values?.length || 0}`);
+    console.log(`📊 Shareholders data rows: ${shareholdersData.values?.length || 0}`);
     
     // Transform and validate data
-    const companies = transformSheetsData(companiesData, directorsData);
+    const companies = transformSheetsData(companiesData, directorsData, shareholdersData);
     console.log(`✅ Successfully processed ${companies.length} companies with directors`);
     
     // Return the transformed data
@@ -522,11 +554,12 @@ function parseFinancialValue(value) {
 }
 
 // Transform Google Sheets data to application format
-function transformSheetsData(companiesData, directorsData) {
+function transformSheetsData(companiesData, directorsData, shareholdersData) {
   const companyRows = companiesData.values || [];
   const directorRows = directorsData.values || [];
+  const shareholderRows = shareholdersData.values || [];
   
-  console.log(`🔄 Transforming ${companyRows.length} companies and ${directorRows.length} directors...`);
+  console.log(`🔄 Transforming ${companyRows.length} companies, ${directorRows.length} directors, and ${shareholderRows.length} shareholders...`);
   
   // Process directors data first
   const directorsByCompany = {};
@@ -554,6 +587,31 @@ function transformSheetsData(companiesData, directorsData) {
   console.log(`👥 Processed directors for ${Object.keys(directorsByCompany).length} companies`);
   console.log(`📋 Director company names found:`, Object.keys(directorsByCompany));
   
+  // Process shareholders data
+  const shareholdersByCompany = {};
+  shareholderRows.forEach((row, index) => {
+    try {
+      const companyName = row[0]?.trim();
+      const shareholder = {
+        name: row[1] || '',
+        percentage: parseFloat(row[2]) || 0,
+        date: row[3] || ''
+      };
+      
+      if (companyName && shareholder.name) {
+        if (!shareholdersByCompany[companyName]) {
+          shareholdersByCompany[companyName] = [];
+        }
+        shareholdersByCompany[companyName].push(shareholder);
+      }
+    } catch (error) {
+      console.warn(`⚠️ Error parsing shareholder row ${index + 2}:`, row, error.message);
+    }
+  });
+  
+  console.log(`📊 Processed shareholders for ${Object.keys(shareholdersByCompany).length} companies`);
+  console.log(`📋 Shareholder company names found:`, Object.keys(shareholdersByCompany));
+  
   // Process companies and match with directors
   const companies = companyRows
     .map((row, index) => {
@@ -572,7 +630,8 @@ function transformSheetsData(companiesData, directorsData) {
           low52: parseFinancialValue(row[10]), // Column K: Low52
           priceChange: parseFinancialValue(row[11]), // Column L: Price_Change
           changePercent: null, // You don't have Price_Change_% column yet
-          directors: []
+          directors: [],
+          shareholders: []
         };
         
         // Try to match directors by company name variations
@@ -629,6 +688,38 @@ function transformSheetsData(companiesData, directorsData) {
           company.directors = matchedDirectors;
         }
         
+        // Try to match shareholders using the same company name variations
+        let matchedShareholders = null;
+        
+        // First try exact matches
+        for (const variation of companyNameVariations) {
+          if (shareholdersByCompany[variation]) {
+            matchedShareholders = shareholdersByCompany[variation];
+            console.log(`📊 Exact match: ${matchedShareholders.length} shareholders for ${company.company} (via "${variation}")`);
+            break;
+          }
+        }
+        
+        // If no exact match, try partial matching
+        if (!matchedShareholders) {
+          for (const shareholderCompanyName of Object.keys(shareholdersByCompany)) {
+            for (const variation of companyNameVariations) {
+              // Check if company name appears in shareholder company name (case insensitive)
+              if (shareholderCompanyName.toLowerCase().includes(variation.toLowerCase()) ||
+                  variation.toLowerCase().includes(shareholderCompanyName.toLowerCase())) {
+                matchedShareholders = shareholdersByCompany[shareholderCompanyName];
+                console.log(`📊 Partial match: ${matchedShareholders.length} shareholders for ${company.company} (${variation} ↔ ${shareholderCompanyName})`);
+                break;
+              }
+            }
+            if (matchedShareholders) break;
+          }
+        }
+        
+        if (matchedShareholders) {
+          company.shareholders = matchedShareholders;
+        }
+        
         return company;
       } catch (error) {
         console.warn(`⚠️ Error parsing company row ${index + 2}:`, row, error.message);
@@ -643,7 +734,8 @@ function transformSheetsData(companiesData, directorsData) {
     );
     
   const totalDirectors = companies.reduce((sum, company) => sum + company.directors.length, 0);
-  console.log(`✅ Successfully transformed ${companies.length} companies with ${totalDirectors} total directors`);
+  const totalShareholders = companies.reduce((sum, company) => sum + company.shareholders.length, 0);
+  console.log(`✅ Successfully transformed ${companies.length} companies with ${totalDirectors} total directors and ${totalShareholders} total shareholders`);
   return companies;
 }
 

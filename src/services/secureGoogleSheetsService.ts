@@ -8,6 +8,14 @@ export interface Director {
   bioUrl: string;
 }
 
+export interface Shareholder {
+  name: string;
+  type: 'individual' | 'institutional' | 'government' | 'insider' | 'other';
+  percentage: number;
+  shares?: number;
+  reportDate: string;
+}
+
 export interface SecureIBEXCompanyData {
   ticker: string;
   company: string;
@@ -24,6 +32,7 @@ export interface SecureIBEXCompanyData {
   low52?: number;
   dividendYield?: number;
   directors: Director[];
+  shareholders?: Shareholder[];
 }
 
 export interface SecureAPIResponse {
