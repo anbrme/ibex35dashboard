@@ -168,7 +168,7 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
       return;
     }
 
-    // Prepare graph data
+    // Prepare graph data with consolidated nodes
     const elements: ElementDefinition[] = [];
     let hasValidElements = false;
 
@@ -176,6 +176,67 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
     const numCompanies = relevantCompanies.length;
     const companySize = Math.max(30, Math.min(60, 200 / Math.sqrt(numCompanies)));
     const directorSize = Math.max(20, Math.min(40, 150 / Math.sqrt(numCompanies)));
+    const shareholderSize = Math.max(15, Math.min(35, 120 / Math.sqrt(numCompanies)));
+
+    // Collect and consolidate directors and shareholders
+    const directorsMap = new Map<string, {
+      director: any;
+      companies: Set<string>;
+      allPositions: string[];
+    }>();
+    
+    const shareholdersMap = new Map<string, {
+      shareholder: any;
+      companies: Set<string>;
+      totalPercentage: number;
+    }>();
+
+    // First pass: collect all directors and shareholders
+    relevantCompanies.forEach(company => {
+      if (!company || !company.ticker) return;
+
+      // Collect directors
+      if (company.directors && Array.isArray(company.directors)) {
+        company.directors.forEach(director => {
+          if (director && director.name) {
+            const directorKey = director.name.toLowerCase().trim();
+            if (!directorsMap.has(directorKey)) {
+              directorsMap.set(directorKey, {
+                director: director,
+                companies: new Set([company.ticker]),
+                allPositions: [director.position || 'Director']
+              });
+            } else {
+              const existing = directorsMap.get(directorKey)!;
+              existing.companies.add(company.ticker);
+              if (director.position && !existing.allPositions.includes(director.position)) {
+                existing.allPositions.push(director.position);
+              }
+            }
+          }
+        });
+      }
+
+      // Collect shareholders
+      if (company.shareholders && Array.isArray(company.shareholders)) {
+        company.shareholders.forEach(shareholder => {
+          if (shareholder && shareholder.name) {
+            const shareholderKey = shareholder.name.toLowerCase().trim();
+            if (!shareholdersMap.has(shareholderKey)) {
+              shareholdersMap.set(shareholderKey, {
+                shareholder: shareholder,
+                companies: new Set([company.ticker]),
+                totalPercentage: shareholder.percentage || 0
+              });
+            } else {
+              const existing = shareholdersMap.get(shareholderKey)!;
+              existing.companies.add(company.ticker);
+              existing.totalPercentage += (shareholder.percentage || 0);
+            }
+          }
+        });
+      }
+    });
 
     // Add company nodes
     relevantCompanies.forEach(company => {
@@ -192,60 +253,86 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         });
         hasValidElements = true;
       }
+    });
 
-      // Add director nodes (with null safety)
-      if (company.directors && Array.isArray(company.directors) && company.directors.length > 0) {
-        company.directors.forEach((director, idx) => {
-          if (director && director.name) {
-            const directorId = `dir_${company.ticker}_${idx}`;
-            elements.push({
-              data: {
-                id: directorId,
-                label: director.name.split(' ').slice(0, 2).join(' '),
-                type: 'director',
-                director: director,
-                company: company,
-                size: directorSize,
-                color: '#8b5cf6'
-              }
-            });
+    // Add consolidated director nodes
+    directorsMap.forEach((directorData, directorKey) => {
+      const directorId = `dir_${directorKey.replace(/[^a-z0-9]/g, '_')}`;
+      const director = directorData.director;
+      const companyCount = directorData.companies.size;
+      
+      // Adjust size based on number of companies (bigger for cross-board directors)
+      const adjustedSize = companyCount > 1 
+        ? Math.min(directorSize * 1.5, directorSize + 10)
+        : directorSize;
 
-            // Add edge between company and director
-            elements.push({
-              data: {
-                id: `edge_${company.ticker}_${directorId}`,
-                source: company.ticker,
-                target: directorId,
-                type: 'board_member'
-              }
-            });
-          }
-        });
-      } else {
-        // Add a placeholder director node if no directors exist
-        const placeholderDirectorId = `dir_${company.ticker}_placeholder`;
+      elements.push({
+        data: {
+          id: directorId,
+          label: director.name.split(' ').slice(0, 2).join(' '),
+          type: 'director',
+          director: {
+            ...director,
+            allPositions: directorData.allPositions,
+            companyCount: companyCount
+          },
+          companies: Array.from(directorData.companies),
+          size: adjustedSize,
+          color: companyCount > 1 ? '#7c3aed' : '#8b5cf6' // Darker purple for cross-board
+        }
+      });
+
+      // Add edges to all companies
+      directorData.companies.forEach(companyTicker => {
         elements.push({
           data: {
-            id: placeholderDirectorId,
-            label: 'Board Info',
-            type: 'director',
-            director: { name: 'Board Information', position: 'Placeholder', appointmentDate: '', bioUrl: '' },
-            company: company,
-            size: directorSize * 0.8,
-            color: '#9ca3af'
-          }
-        });
-
-        // Add edge between company and placeholder director
-        elements.push({
-          data: {
-            id: `edge_${company.ticker}_${placeholderDirectorId}`,
-            source: company.ticker,
-            target: placeholderDirectorId,
+            id: `edge_${companyTicker}_${directorId}`,
+            source: companyTicker,
+            target: directorId,
             type: 'board_member'
           }
         });
-      }
+      });
+    });
+
+    // Add consolidated shareholder nodes
+    shareholdersMap.forEach((shareholderData, shareholderKey) => {
+      const shareholderId = `shr_${shareholderKey.replace(/[^a-z0-9]/g, '_')}`;
+      const shareholder = shareholderData.shareholder;
+      const companyCount = shareholderData.companies.size;
+      
+      // Adjust size based on number of companies and total percentage
+      const adjustedSize = companyCount > 1 
+        ? Math.min(shareholderSize * 1.5, shareholderSize + 8)
+        : shareholderSize;
+
+      elements.push({
+        data: {
+          id: shareholderId,
+          label: shareholder.name.split(' ').slice(0, 2).join(' '),
+          type: 'shareholder',
+          shareholder: {
+            ...shareholder,
+            companyCount: companyCount,
+            totalPercentage: shareholderData.totalPercentage
+          },
+          companies: Array.from(shareholderData.companies),
+          size: adjustedSize,
+          color: companyCount > 1 ? '#059669' : '#10b981' // Darker green for cross-company
+        }
+      });
+
+      // Add edges to all companies
+      shareholderData.companies.forEach(companyTicker => {
+        elements.push({
+          data: {
+            id: `edge_${companyTicker}_${shareholderId}`,
+            source: companyTicker,
+            target: shareholderId,
+            type: 'shareholder'
+          }
+        });
+      });
     });
 
     // Only initialize if we have valid elements
@@ -318,6 +405,32 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
             'border-color': '#ffffff',
             'border-opacity': 1,
             'z-index': 5
+          }
+        },
+        {
+          selector: 'node[type="shareholder"]',
+          style: {
+            'width': 'data(size)',
+            'height': 'data(size)',
+            'background-color': 'data(color)',
+            'background-image': 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K',
+            'background-fit': 'contain',
+            'background-position-x': '50%',
+            'background-position-y': '50%',
+            'background-width': '60%',
+            'background-height': '60%',
+            'label': 'data(label)',
+            'text-valign': 'bottom',
+            'text-halign': 'center',
+            'text-margin-y': 5,
+            'color': '#1f2937',
+            'font-size': 9,
+            'font-weight': 500,
+            'font-family': 'Inter, sans-serif',
+            'border-width': 2,
+            'border-color': '#ffffff',
+            'border-opacity': 1,
+            'z-index': 3
           }
         },
         {
@@ -437,11 +550,43 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         tooltipText = `${companyName}\n${sector}\n${directorsCount} directors\nMarket Cap: €${(marketCap / 1e9).toFixed(1)}B`;
       } else if (data.director) {
         const director = data.director;
-        const company = data.company;
-        const companyName = company?.company || company?.name || 'Unknown Company';
-        tooltipText = `${director.name || 'Unknown Director'}\n${director.position || 'Director'}\n${companyName}`;
+        const companies = data.companies || [];
+        const companyCount = director.companyCount || 1;
+        
+        tooltipText = `${director.name || 'Unknown Director'}`;
+        if (director.allPositions && director.allPositions.length > 0) {
+          tooltipText += `\n${director.allPositions.join(', ')}`;
+        }
+        
+        if (companyCount > 1) {
+          tooltipText += `\nCross-board director (${companyCount} companies)`;
+          tooltipText += `\nCompanies: ${companies.join(', ')}`;
+        } else {
+          tooltipText += `\nCompany: ${companies[0] || 'Unknown'}`;
+        }
+        
         if (director.appointmentDate) {
           tooltipText += `\nSince: ${director.appointmentDate}`;
+        }
+      } else if (data.shareholder) {
+        const shareholder = data.shareholder;
+        const companies = data.companies || [];
+        const companyCount = shareholder.companyCount || 1;
+        
+        tooltipText = `${shareholder.name || 'Unknown Shareholder'}`;
+        tooltipText += `\nType: ${shareholder.type || 'Unknown'}`;
+        
+        if (companyCount > 1) {
+          tooltipText += `\nCross-company shareholder (${companyCount} companies)`;
+          tooltipText += `\nTotal ownership: ${shareholder.totalPercentage?.toFixed(1) || 0}%`;
+          tooltipText += `\nCompanies: ${companies.join(', ')}`;
+        } else {
+          tooltipText += `\nOwnership: ${shareholder.percentage || 0}%`;
+          tooltipText += `\nCompany: ${companies[0] || 'Unknown'}`;
+        }
+        
+        if (shareholder.reportDate) {
+          tooltipText += `\nReport Date: ${shareholder.reportDate}`;
         }
       }
       
@@ -592,6 +737,18 @@ export function CytoscapeNetworkGraph({ companies, selectedCompanyIds }: Props) 
         <LegendItem>
           <LegendDot color="#8b5cf6" size={12} />
           <span>Directors</span>
+        </LegendItem>
+        <LegendItem>
+          <LegendDot color="#7c3aed" size={14} />
+          <span>Cross-board Directors</span>
+        </LegendItem>
+        <LegendItem>
+          <LegendDot color="#10b981" size={10} />
+          <span>Shareholders</span>
+        </LegendItem>
+        <LegendItem>
+          <LegendDot color="#059669" size={12} />
+          <span>Cross-company Shareholders</span>
         </LegendItem>
         <LegendItem>
           <div style={{ 
