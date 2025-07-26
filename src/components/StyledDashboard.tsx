@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import styled, { createGlobalStyle, keyframes } from 'styled-components';
-import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, DollarSign, ArrowUp, ArrowDown, Percent, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Building2, Users, Network, LineChart, PieChart, RefreshCw, Sparkles, BarChart3, TrendingUp, DollarSign, ArrowUp, ArrowDown, Percent, ChevronLeft, ChevronRight, Newspaper } from 'lucide-react';
 import { SecureGoogleSheetsService, type SecureIBEXCompanyData } from '../services/secureGoogleSheetsService';
 import { EChartsNetworkGraph } from './enhanced/EChartsNetworkGraph';
 import { NetworkAnalyticsDashboard } from './enhanced/NetworkAnalyticsDashboard';
@@ -8,6 +8,8 @@ import { networkAnalyticsService } from '../services/networkAnalytics';
 import { DirectorsAnalysisPanel } from './DirectorsAnalysisPanel';
 import { ShareholdersAnalysisPanel } from './ShareholdersAnalysisPanel';
 import { ComprehensiveInsights } from './insights/ComprehensiveInsights';
+import { NewsService } from '../services/newsService';
+import type { CompanyNews } from '../types/database';
 
 // Global styles
 const GlobalStyle = createGlobalStyle`
@@ -766,12 +768,13 @@ export function StyledDashboard() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(new Set());
   const [expandedCompanyIds, setExpandedCompanyIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeView, setActiveView] = useState<'network' | 'sectors' | 'performance' | 'directors' | 'shareholders' | 'insights'>('network');
+  const [activeView, setActiveView] = useState<'network' | 'sectors' | 'performance' | 'directors' | 'shareholders' | 'insights' | 'news'>('network');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string>('');
   const [isPanelVisible, setIsPanelVisible] = useState(true);
   const [analyticsVisible, setAnalyticsVisible] = useState(true);
+  const [news, setNews] = useState<CompanyNews[]>([]);
 
   // Calculate network analytics
   const networkAnalysis = useMemo(() => {
@@ -781,8 +784,39 @@ export function StyledDashboard() {
   }, [companies, selectedCompanyIds]);
 
   useEffect(() => {
-    fetchData();
+    const initializeData = async () => {
+      await fetchData(); // Wait for company data to load first
+      await fetchNews(); // Then fetch news
+    };
+    
+    initializeData();
   }, []);
+
+  // Refetch news when selected companies change
+  useEffect(() => {
+    if (selectedCompanyIds.size > 0) {
+      const selectedSymbols = Array.from(selectedCompanyIds);
+      fetchNews(selectedSymbols);
+    } else {
+      fetchNews();
+    }
+  }, [selectedCompanyIds]);
+  
+  const fetchNews = async (selectedCompanySymbols?: string[]) => {
+    try {
+      let newsData;
+      if (selectedCompanySymbols && selectedCompanySymbols.length > 0) {
+        // Fetch news for selected companies
+        newsData = await NewsService.fetchSelectedCompaniesNews(selectedCompanySymbols, companies, 5);
+      } else {
+        // Fetch general market news
+        newsData = await NewsService.fetchMarketNews();
+      }
+      setNews(newsData);
+    } catch (err) {
+      console.error('Error fetching news:', err);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -1288,6 +1322,7 @@ export function StyledDashboard() {
                 { id: 'directors', label: 'Directors', icon: Users, description: 'Board analysis' },
                 { id: 'shareholders', label: 'Shareholders', icon: TrendingUp, description: 'Ownership structure' },
                 { id: 'insights', label: 'Financial Insights', icon: BarChart3, description: 'Advanced analytics' },
+                { id: 'news', label: 'News', icon: Newspaper, description: 'RSS news feeds' },
               ].map((tab) => {
                 const IconComponent = tab.icon;
                 const isActive = activeView === tab.id;
@@ -1295,7 +1330,7 @@ export function StyledDashboard() {
                   <ViewTab
                     key={tab.id}
                     isActive={isActive}
-                    onClick={() => setActiveView(tab.id as 'network' | 'sectors' | 'performance' | 'directors' | 'insights')}
+                    onClick={() => setActiveView(tab.id as 'network' | 'sectors' | 'performance' | 'directors' | 'shareholders' | 'insights' | 'news')}
                   >
                     <IconComponent size={20} />
                     <TabInfo>
@@ -1317,7 +1352,13 @@ export function StyledDashboard() {
                   {activeView === 'sectors' && 'Sector Distribution'}
                   {activeView === 'performance' && 'Performance Overview'}
                   {activeView === 'directors' && 'Director Analysis'}
+                  {activeView === 'shareholders' && 'Shareholders Analysis'}
                   {activeView === 'insights' && 'Financial Intelligence Dashboard'}
+                  {activeView === 'news' && (
+                    selectedCompanyIds.size > 0 
+                      ? `News for Selected Companies (${selectedCompanyIds.size})`
+                      : 'Latest Market News (RSS Feeds)'
+                  )}
                 </VisualizationTitle>
                 {activeView === 'network' && selectedCompanyIds.size > 0 && (
                   <AnalyticsToggle 
@@ -1397,6 +1438,109 @@ export function StyledDashboard() {
                 {activeView === 'shareholders' && <ShareholdersAnalysisPanel companies={companies} selectedCompanyIds={selectedCompanyIds} />}
                 
                 {activeView === 'insights' && <ComprehensiveInsights companies={companies} selectedCompanyIds={selectedCompanyIds} />}
+                
+                {activeView === 'news' && (
+                  <div style={{ padding: '20px', maxHeight: '500px', overflowY: 'auto' }}>
+                    {news.length > 0 ? news.map((item) => (
+                      <div key={item.id} style={{ 
+                        marginBottom: '20px', 
+                        padding: '16px', 
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        border: '1px solid #e5e5e5',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+                          <h3 style={{ 
+                            margin: 0, 
+                            color: '#1e40af', 
+                            fontSize: '16px', 
+                            fontWeight: '600' 
+                          }}>
+                            <a 
+                              href={item.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              style={{ 
+                                color: 'inherit', 
+                                textDecoration: 'none' 
+                              }}
+                              onMouseOver={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                              onMouseOut={(e) => e.currentTarget.style.textDecoration = 'none'}
+                            >
+                              {item.title}
+                            </a>
+                          </h3>
+                          <span style={{
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            backgroundColor: 
+                              item.sentiment === 'positive' ? '#dcfce7' :
+                              item.sentiment === 'negative' ? '#fee2e2' : '#f3f4f6',
+                            color: 
+                              item.sentiment === 'positive' ? '#166534' :
+                              item.sentiment === 'negative' ? '#dc2626' : '#374151'
+                          }}>
+                            {item.sentiment}
+                          </span>
+                        </div>
+                        <p style={{ 
+                          color: '#6b7280', 
+                          fontSize: '14px', 
+                          margin: '0 0 8px 0',
+                          lineHeight: '1.4'
+                        }}>
+                          {item.summary}
+                        </p>
+                        <div style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          fontSize: '12px',
+                          color: '#9ca3af'
+                        }}>
+                          <span>{item.source}</span>
+                          <span>{item.publishedAt.toLocaleDateString('es-ES')}</span>
+                        </div>
+                        {item.tags && item.tags.length > 0 && (
+                          <div style={{ display: 'flex', gap: '4px', marginTop: '8px', flexWrap: 'wrap' }}>
+                            {item.tags.map((tag, idx) => (
+                              <span key={idx} style={{
+                                padding: '2px 6px',
+                                backgroundColor: '#dbeafe',
+                                color: '#1d4ed8',
+                                fontSize: '11px',
+                                borderRadius: '4px',
+                                fontWeight: '500'
+                              }}>
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )) : (
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: '40px',
+                        color: '#6b7280'
+                      }}>
+                        <Newspaper size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
+                        <p style={{ margin: 0, fontSize: '16px' }}>
+                          {selectedCompanyIds.size > 0 ? 'Loading company news...' : 'Loading market news...'}
+                        </p>
+                        <p style={{ margin: '8px 0 0 0', fontSize: '14px' }}>
+                          {selectedCompanyIds.size > 0 
+                            ? `Fetching news for ${selectedCompanyIds.size} selected companies`
+                            : 'Fetching latest RSS feeds from Google News'
+                          }
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </VisualizationContent>
             </VisualizationCard>
           </VisualizationArea>

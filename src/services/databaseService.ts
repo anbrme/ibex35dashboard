@@ -89,6 +89,11 @@ export class DatabaseService {
       .find(c => c.symbol === symbol) || null;
   }
 
+  static async getCompanyByISIN(isin: string): Promise<DatabaseCompany | null> {
+    return Array.from(this.companies.values())
+      .find(c => c.isin === isin) || null;
+  }
+
   static async getAllCompanies(): Promise<DatabaseCompany[]> {
     return Array.from(this.companies.values())
       .sort((a, b) => a.name.localeCompare(b.name));

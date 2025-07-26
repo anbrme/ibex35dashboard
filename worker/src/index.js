@@ -28,6 +28,10 @@ export default {
       return handleGetCompanies(db, request);
     } else if (path === '/api/sync') {
       return handleDataSync(db, env, request);
+    } else if (path === '/api/news') {
+      return handleNewsOperations(db, request);
+    } else if (path === '/api/news/analytics') {
+      return handleNewsAnalytics(db, request);
     } else if (path === '/api/network') {
       return handleNetworkData(db, request);
     } else if (path === '/api/status') {
@@ -831,6 +835,127 @@ function transformSheetsData(companiesData, directorsData, shareholdersData) {
   const totalShareholders = companies.reduce((sum, company) => sum + company.shareholders.length, 0);
   console.log(`✅ Successfully transformed ${companies.length} companies with ${totalDirectors} total directors and ${totalShareholders} total shareholders`);
   return companies;
+}
+
+// Handle /api/news endpoint - news operations
+async function handleNewsOperations(db, request) {
+  const url = new URL(request.url);
+  const companyId = url.searchParams.get('companyId');
+  const companyIds = url.searchParams.get('companyIds');
+  const limit = parseInt(url.searchParams.get('limit')) || 20;
+
+  try {
+    if (request.method === 'GET') {
+      let news;
+      if (companyId) {
+        // Get news for a specific company
+        news = await db.getNewsForCompany(companyId, limit);
+      } else if (companyIds) {
+        // Get news for multiple companies
+        const ids = companyIds.split(',');
+        news = await db.getNewsForCompanies(ids, limit);
+      } else {
+        // Get general market news
+        news = await db.getMarketNews(limit);
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        news,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    } else if (request.method === 'POST') {
+      // Save news articles
+      const body = await request.json();
+      
+      if (Array.isArray(body.newsItems)) {
+        // Save multiple news items
+        const result = await db.saveMultipleNewsItems(body.newsItems);
+        return new Response(JSON.stringify({
+          success: true,
+          result,
+          timestamp: new Date().toISOString()
+        }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      } else if (body.newsItem) {
+        // Save single news item
+        const result = await db.saveNewsItem(body.newsItem);
+        return new Response(JSON.stringify({
+          success: true,
+          result,
+          timestamp: new Date().toISOString()
+        }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      } else {
+        return createErrorResponse('Invalid request body', 400);
+      }
+    } else {
+      return createErrorResponse('Method not allowed', 405);
+    }
+  } catch (error) {
+    console.error('News operation error:', error);
+    return createErrorResponse(`News operation failed: ${error.message}`, 500);
+  }
+}
+
+// Handle /api/news/analytics endpoint - news analytics
+async function handleNewsAnalytics(db, request) {
+  const url = new URL(request.url);
+  const companyId = url.searchParams.get('companyId');
+  const days = parseInt(url.searchParams.get('days')) || 30;
+
+  try {
+    if (request.method === 'GET') {
+      if (companyId) {
+        // Get sentiment analysis for a specific company
+        const sentimentAnalysis = await db.getNewsSentimentAnalysis(companyId, days);
+        return new Response(JSON.stringify({
+          success: true,
+          sentimentAnalysis,
+          companyId,
+          days,
+          timestamp: new Date().toISOString()
+        }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      } else {
+        // Get news analytics overview for all companies
+        const overview = await db.getNewsAnalyticsOverview(days);
+        return new Response(JSON.stringify({
+          success: true,
+          overview,
+          days,
+          timestamp: new Date().toISOString()
+        }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      }
+    } else {
+      return createErrorResponse('Method not allowed', 405);
+    }
+  } catch (error) {
+    console.error('News analytics error:', error);
+    return createErrorResponse(`News analytics failed: ${error.message}`, 500);
+  }
 }
 
 // Create standardized error response

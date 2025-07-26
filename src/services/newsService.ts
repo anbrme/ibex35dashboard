@@ -1,61 +1,15 @@
-import axios from 'axios';
 import type { CompanyNews } from '../types/database';
 import { DatabaseService } from './databaseService';
 
 export class NewsService {
-  private static readonly NEWS_API_KEY = 'demo'; // Replace with actual API key
-  private static readonly NEWS_API_BASE_URL = 'https://newsapi.org/v2';
   
   static async fetchCompanyNews(symbol: string, limit = 20): Promise<CompanyNews[]> {
     try {
       const company = await DatabaseService.getCompanyBySymbol(symbol);
       if (!company) return [];
 
-      const searchQuery = this.buildSearchQuery(company.name, company.symbol);
-      
-      const response = await axios.get(`${this.NEWS_API_BASE_URL}/everything`, {
-        params: {
-          q: searchQuery,
-          language: 'es',
-          sortBy: 'publishedAt',
-          pageSize: limit,
-          apiKey: this.NEWS_API_KEY
-        }
-      });
-
-      if (response.data.status !== 'ok') {
-        return this.getFallbackNews(company.id, company.name);
-      }
-
-      const articles = response.data.articles || [];
-      const news: CompanyNews[] = [];
-
-      for (const article of articles) {
-        if (!article.title || !article.url) continue;
-
-        const newsItem: CompanyNews = {
-          id: DatabaseService.generateId(),
-          companyId: company.id,
-          title: article.title,
-          summary: article.description || '',
-          content: article.content || '',
-          url: article.url,
-          source: article.source?.name || 'Unknown',
-          author: article.author || undefined,
-          publishedAt: new Date(article.publishedAt),
-          sentiment: this.analyzeSentiment(article.title + ' ' + (article.description || '')),
-          relevanceScore: this.calculateRelevance(article.title, company.name),
-          tags: this.extractTags(article.title + ' ' + (article.description || '')),
-          language: 'es',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-
-        news.push(newsItem);
-        await DatabaseService.saveNews(newsItem);
-      }
-
-      return news;
+      // For now, return fallback news until alternative news sources are implemented
+      return this.getFallbackNews(company.id, company.name);
     } catch (error) {
       console.error(`Error fetching news for ${symbol}:`, error);
       const company = await DatabaseService.getCompanyBySymbol(symbol);
@@ -63,66 +17,49 @@ export class NewsService {
     }
   }
 
+  static async fetchSelectedCompaniesNews(selectedSymbols: string[], companies: any[], limit = 10): Promise<CompanyNews[]> {
+    const allNews: CompanyNews[] = [];
+    
+    for (const symbol of selectedSymbols) {
+      try {
+        // Find company in the Google Sheets data
+        const company = companies.find(c => c.ticker === symbol);
+        
+        if (company) {
+          // Use company ISIN as ID for fallback news
+          const companyNews = this.getFallbackNews(company.isin, company.company);
+          allNews.push(...companyNews);
+        }
+      } catch (error) {
+        console.error(`Error fetching news for ${symbol}:`, error);
+      }
+    }
+    
+    // Sort by publication date (newest first)
+    return allNews.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime()).slice(0, limit * selectedSymbols.length);
+  }
+
+  private static cleanHtmlContent(content: string): string {
+    return content
+      .replace(/<[^>]*>/g, '')
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
+  }
+
   static async fetchMarketNews(limit = 50): Promise<CompanyNews[]> {
     try {
-      const response = await axios.get(`${this.NEWS_API_BASE_URL}/everything`, {
-        params: {
-          q: 'IBEX 35 OR "bolsa española" OR "mercado español" OR "Bolsa de Madrid"',
-          language: 'es',
-          sortBy: 'publishedAt',
-          pageSize: limit,
-          apiKey: this.NEWS_API_KEY
-        }
-      });
-
-      if (response.data.status !== 'ok') {
-        return this.getFallbackMarketNews();
-      }
-
-      const articles = response.data.articles || [];
-      const news: CompanyNews[] = [];
-
-      for (const article of articles) {
-        if (!article.title || !article.url) continue;
-
-        const relatedCompany = await this.findRelatedCompany(article.title + ' ' + (article.description || ''));
-
-        const newsItem: CompanyNews = {
-          id: DatabaseService.generateId(),
-          companyId: relatedCompany?.id || 'market',
-          title: article.title,
-          summary: article.description || '',
-          content: article.content || '',
-          url: article.url,
-          source: article.source?.name || 'Unknown',
-          author: article.author || undefined,
-          publishedAt: new Date(article.publishedAt),
-          sentiment: this.analyzeSentiment(article.title + ' ' + (article.description || '')),
-          relevanceScore: 0.8,
-          tags: this.extractTags(article.title + ' ' + (article.description || '')),
-          language: 'es',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-
-        news.push(newsItem);
-        
-        if (relatedCompany) {
-          await DatabaseService.saveNews(newsItem);
-        }
-      }
-
-      return news;
+      // Return fallback market news until alternative news sources are implemented
+      return this.getFallbackMarketNews();
     } catch (error) {
       console.error('Error fetching market news:', error);
       return this.getFallbackMarketNews();
     }
   }
 
-  private static buildSearchQuery(companyName: string, symbol: string): string {
-    const cleanSymbol = symbol.replace('.MC', '');
-    return `"${companyName}" OR "${cleanSymbol}"`;
-  }
 
   private static async findRelatedCompany(text: string) {
     const companies = await DatabaseService.getAllCompanies();

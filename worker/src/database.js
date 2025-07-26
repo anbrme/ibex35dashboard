@@ -387,4 +387,161 @@ export class DatabaseService {
 
     return results.results;
   }
+
+  // News operations
+  async saveNewsItem(newsItem) {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO news_items (
+        id, company_id, title, summary, content, url, source, author,
+        published_at, sentiment, sentiment_score, relevance_score, 
+        tags, language, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+
+    const result = await stmt.bind(
+      newsItem.id,
+      newsItem.companyId,
+      newsItem.title,
+      newsItem.summary,
+      newsItem.content,
+      newsItem.url,
+      newsItem.source,
+      newsItem.author,
+      newsItem.publishedAt,
+      newsItem.sentiment,
+      newsItem.sentimentScore || 0,
+      newsItem.relevanceScore || 0,
+      JSON.stringify(newsItem.tags || []),
+      newsItem.language || 'es'
+    ).run();
+
+    return { success: true, changes: result.changes };
+  }
+
+  async saveMultipleNewsItems(newsItems) {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO news_items (
+        id, company_id, title, summary, content, url, source, author,
+        published_at, sentiment, sentiment_score, relevance_score, 
+        tags, language, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+
+    const batch = newsItems.map(newsItem => 
+      stmt.bind(
+        newsItem.id,
+        newsItem.companyId,
+        newsItem.title,
+        newsItem.summary,
+        newsItem.content,
+        newsItem.url,
+        newsItem.source,
+        newsItem.author,
+        newsItem.publishedAt,
+        newsItem.sentiment,
+        newsItem.sentimentScore || 0,
+        newsItem.relevanceScore || 0,
+        JSON.stringify(newsItem.tags || []),
+        newsItem.language || 'es'
+      )
+    );
+
+    const results = await this.db.batch(batch);
+    return {
+      success: true,
+      recordsProcessed: results.length,
+      changes: results.reduce((sum, r) => sum + r.changes, 0)
+    };
+  }
+
+  async getNewsForCompany(companyId, limit = 20) {
+    const results = await this.db.prepare(`
+      SELECT id, company_id, title, summary, content, url, source, author,
+             published_at, sentiment, sentiment_score, relevance_score,
+             tags, language, created_at, updated_at
+      FROM news_items
+      WHERE company_id = ?
+      ORDER BY published_at DESC
+      LIMIT ?
+    `).bind(companyId, limit).all();
+
+    return results.results.map(item => ({
+      ...item,
+      tags: item.tags ? JSON.parse(item.tags) : []
+    }));
+  }
+
+  async getNewsForCompanies(companyIds, limit = 50) {
+    if (!companyIds.length) return [];
+    
+    const placeholders = companyIds.map(() => '?').join(',');
+    const results = await this.db.prepare(`
+      SELECT id, company_id, title, summary, content, url, source, author,
+             published_at, sentiment, sentiment_score, relevance_score,
+             tags, language, created_at, updated_at
+      FROM news_items
+      WHERE company_id IN (${placeholders})
+      ORDER BY published_at DESC
+      LIMIT ?
+    `).bind(...companyIds, limit).all();
+
+    return results.results.map(item => ({
+      ...item,
+      tags: item.tags ? JSON.parse(item.tags) : []
+    }));
+  }
+
+  async getMarketNews(limit = 50) {
+    const results = await this.db.prepare(`
+      SELECT id, company_id, title, summary, content, url, source, author,
+             published_at, sentiment, sentiment_score, relevance_score,
+             tags, language, created_at, updated_at
+      FROM news_items
+      WHERE company_id = 'market'
+      ORDER BY published_at DESC
+      LIMIT ?
+    `).bind(limit).all();
+
+    return results.results.map(item => ({
+      ...item,
+      tags: item.tags ? JSON.parse(item.tags) : []
+    }));
+  }
+
+  async getNewsSentimentAnalysis(companyId, days = 30) {
+    const results = await this.db.prepare(`
+      SELECT 
+        sentiment,
+        COUNT(*) as count,
+        AVG(sentiment_score) as avg_score,
+        DATE(published_at) as date
+      FROM news_items
+      WHERE company_id = ? 
+      AND published_at >= datetime('now', '-${days} days')
+      GROUP BY sentiment, DATE(published_at)
+      ORDER BY date DESC
+    `).bind(companyId).all();
+
+    return results.results;
+  }
+
+  async getNewsAnalyticsOverview(days = 30) {
+    const results = await this.db.prepare(`
+      SELECT 
+        c.ticker,
+        c.name,
+        COUNT(n.id) as news_count,
+        AVG(n.sentiment_score) as avg_sentiment,
+        AVG(n.relevance_score) as avg_relevance,
+        MAX(n.published_at) as latest_news
+      FROM companies c
+      LEFT JOIN news_items n ON c.id = n.company_id
+      WHERE n.published_at >= datetime('now', '-${days} days')
+      GROUP BY c.id, c.ticker, c.name
+      HAVING news_count > 0
+      ORDER BY news_count DESC, avg_sentiment DESC
+    `).all();
+
+    return results.results;
+  }
 }
